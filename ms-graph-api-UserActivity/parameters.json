@@ -4,5 +4,6 @@
   "endpoint": "https://graph.microsoft.com/v1.0/users",
   "endpoint_test": "https://graph.microsoft.com/beta/users/fe6be9e1-e6f4-4710-9b47-fd5d145cfae9?$select=displayName,mail,otherMails,mobilePhone,signInActivity",
   "endpoint_test2": "https://graph.microsoft.com/beta/users?$filter=signInActivity/lastSignInDateTime le 2020-06-01T00:00:00Z&$select=displayName,mail,otherMails,mobilePhone,signInActivity",
+  "endpoint_test3": "https://graph.microsoft.com/v1.0/auditlogs/signIns?&$filter=createdDateTime ge 2020-08-19T03:00:00Z and createdDateTime le 2020-08-20T03:00:00Z&$orderby=createdDateTime",
   "logging_level": "INFO"
 }

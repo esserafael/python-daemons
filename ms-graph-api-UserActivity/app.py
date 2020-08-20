@@ -56,7 +56,7 @@ if not client_secret:
     logging.error(errmsg)
     raise ValueError(errmsg)
 else:
-    logging.info("client_secret found.".format(client_id))   
+    logging.info("client_secret found.")
 
 config = json.load(open(sys.argv[1]))
 
@@ -82,9 +82,68 @@ if not result:
     result = app.acquire_token_for_client(scopes=config["scope"])
 
 if "access_token" in result:
+
+    csv_file_path = "graph_data.csv"
+
+    with (open(csv_file_path, "w", newline='', encoding='utf-8')) as csv_file:
+        csv_writer = csv.writer(csv_file)
+        csv_writer.writerow([
+            "Nome",
+            "E-mailUniasselvi",
+            "DataDeEntrada",
+            "AplicativoMicrosoft",
+            "AplicativoClienteUtilizado",
+            "Navegador",
+            "SistemaOperacional",
+            "IPAddress",
+            "Cidade",
+            "Estado",
+            "País",
+            "StatusDaEntrada"
+        ])
+
+    def get_graph_data(endpoint):
+        graph_data = requests.get(  # Use token to call downstream service
+        endpoint,
+        headers={'Authorization': 'Bearer ' + result['access_token']}, ).json()
+
+        return graph_data
+    
+    def save_to_csv(graph_data):
+        if "error" in graph_data:
+            logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
+        else:
+            print("Graph API call result page")
+            #print(json.dumps(graph_data, indent=2))
+            with open('graph_data.json', 'w', encoding='utf-8') as f_json:
+                json.dump(graph_data, f_json, ensure_ascii=False, indent=4)
+
+            try:
+                with (open(csv_file_path, "a", newline='', encoding='utf-8')) as csv_file:
+                    csv_writer = csv.writer(csv_file)
+                    for graph_data in graph_data["value"]:
+                        csv_writer.writerow((
+                            graph_data["userDisplayName"],
+                            graph_data["userPrincipalName"],
+                            graph_data["createdDateTime"],
+                            graph_data["appDisplayName"],
+                            graph_data["clientAppUsed"],
+                            graph_data["deviceDetail"]["browser"],
+                            graph_data["deviceDetail"]["operatingSystem"],
+                            graph_data["ipAddress"],
+                            graph_data["location"]["city"],
+                            graph_data["location"]["state"],
+                            graph_data["location"]["countryOrRegion"],
+                            graph_data["status"]["errorCode"]))
+                logging.info("Graph response page saved at CSV file '{0}'.".format(csv_file_path))
+            except:
+                logging.error("Exception while generating CSV file.")
+        return
+
     # Calling graph using the access token
+    '''
     graph_data = requests.get(  # Use token to call downstream service
-        config["endpoint_test2"],
+        config["endpoint_test3"],
         headers={'Authorization': 'Bearer ' + result['access_token']}, ).json()
     if "error" in graph_data:
         logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
@@ -95,20 +154,41 @@ if "access_token" in result:
             json.dump(graph_data, f_json, ensure_ascii=False, indent=4)
         #df = pd.read_json(r"graph_data.json")
         #df.to_csv("test.csv", encoding='utf-8', index=False)
+    '''
 
-        #json_data = json.loads(graph_data)
+    graph_data = get_graph_data(config["endpoint_test3"])
+    save_to_csv(graph_data)
 
-        f_csv = csv.writer(open("graph_data.csv", "w", encoding='utf-8'))
-        f_csv.writerow(["Nome", "E-mailUniasselvi", "E-mailPessoal", "Celular", "ÚltimoLogon"])
+    while "@odata.nextLink" in graph_data:
+        graph_data = get_graph_data(graph_data["@odata.nextLink"])
+        save_to_csv(graph_data)
 
-        for graph_data in graph_data:
+        '''f_csv = csv.writer(open("graph_data.csv", "w", encoding='utf-8'))
+        f_csv.writerow(
+            [
+                "Nome",
+                "E-mailUniasselvi",
+                "DataDeEntrada",
+                "AplicativoDeEntrada",
+                "AplicativoCliente",
+                "Navegador",
+                "SistemaOperacional",
+                "IPAddress",
+                "StatusDaEntrada"
+                ])
+
+        for graph_data in graph_data["value"]:
             f_csv.writerow(
-                graph_data["displayName"],
-                graph_data["mail"],
-                graph_data["otherMails"][0],
-                graph_data["mobilePhone"],
-                graph_data["value"][0]["signInActivity"]["lastSignInDateTime"]
-            )
+                (graph_data["userDisplayName"],
+                graph_data["userPrincipalName"],
+                graph_data["createdDateTime"],
+                graph_data["appDisplayName"],
+                graph_data["deviceDetail"]["browser"],
+                graph_data["deviceDetail"]["operatingSystem"],
+                graph_data["ipAddress"],
+                graph_data["status"]["errorCode"])
+            )'''
+
         
 else:
     logging.error("{0}: {1} (correlation_id: {3})".format(result.get("error"), result.get("error_description"), result.get("correlation_id")))
