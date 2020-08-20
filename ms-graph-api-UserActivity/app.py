@@ -26,11 +26,13 @@ import sys  # For simplicity, we'll read config file from 1st CLI param sys.argv
 import json
 import csv
 import logging
+import datetime
 
 import requests
 import msal
 
 import pandas as pd
+
 
 # Logging
 logging.basicConfig(
@@ -58,7 +60,7 @@ if not client_secret:
 else:
     logging.info("client_secret found.")
 
-config = json.load(open(sys.argv[1]))
+config = json.load(open(sys.argv[1])) 
 
 # Create a preferably long-lived app instance which maintains a token cache.
 app = msal.ConfidentialClientApplication(
@@ -83,7 +85,18 @@ if not result:
 
 if "access_token" in result:
 
-    csv_file_path = "graph_data.csv"
+    yesterday = datetime.datetime.today() - datetime.timedelta(days=1)
+    
+    #request_filter = "filter=createdDateTime ge 2020-08-19T03:00:00Z and createdDateTime le 2020-08-20T03:00:00Z"
+    request_filter = "filter=createdDateTime ge 2020-08-{0}T03:00:00Z and createdDateTime le 2020-08-{1}T03:00:00Z".format(
+        yesterday.strftime("%d"),
+        datetime.datetime.today().strftime("%d"))    
+    request_order = "orderby=createdDateTime"
+    endpoint_signIns = "{0}?&${1}&${2}".format(config["endpoint_signIns"], request_filter, request_order)
+
+    logging.debug("Endpoint set as: '{0}'".format(endpoint_signIns))
+
+    csv_file_path = "auditSignIns_{0}_generated_{1}.csv".format(yesterday.strftime("%Y-%m-%d"), datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"))
 
     with (open(csv_file_path, "w", newline='', encoding='utf-8')) as csv_file:
         csv_writer = csv.writer(csv_file)
@@ -156,7 +169,9 @@ if "access_token" in result:
         #df.to_csv("test.csv", encoding='utf-8', index=False)
     '''
 
-    graph_data = get_graph_data(config["endpoint_test3"])
+    logging.info("Sending request do enpoint.")
+
+    graph_data = get_graph_data(endpoint_signIns)
     save_to_csv(graph_data)
 
     while "@odata.nextLink" in graph_data:
