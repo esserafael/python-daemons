@@ -24,10 +24,13 @@ You can then run this sample with a JSON configuration file:
 import os
 import sys  # For simplicity, we'll read config file from 1st CLI param sys.argv[1]
 import json
+import csv
 import logging
 
 import requests
 import msal
+
+import pandas as pd
 
 # Logging
 logging.basicConfig(
@@ -81,13 +84,32 @@ if not result:
 if "access_token" in result:
     # Calling graph using the access token
     graph_data = requests.get(  # Use token to call downstream service
-        config["endpoint_test"],
+        config["endpoint_test2"],
         headers={'Authorization': 'Bearer ' + result['access_token']}, ).json()
     if "error" in graph_data:
         logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
     else:
         print("Graph API call result: ")
         print(json.dumps(graph_data, indent=2))
+        with open('graph_data.json', 'w', encoding='utf-8') as f_json:
+            json.dump(graph_data, f_json, ensure_ascii=False, indent=4)
+        #df = pd.read_json(r"graph_data.json")
+        #df.to_csv("test.csv", encoding='utf-8', index=False)
+
+        #json_data = json.loads(graph_data)
+
+        f_csv = csv.writer(open("graph_data.csv", "w", encoding='utf-8'))
+        f_csv.writerow(["Nome", "E-mailUniasselvi", "E-mailPessoal", "Celular", "ÚltimoLogon"])
+
+        for graph_data in graph_data:
+            f_csv.writerow(
+                graph_data["displayName"],
+                graph_data["mail"],
+                graph_data["otherMails"][0],
+                graph_data["mobilePhone"],
+                graph_data["value"][0]["signInActivity"]["lastSignInDateTime"]
+            )
+        
 else:
     logging.error("{0}: {1} (correlation_id: {3})".format(result.get("error"), result.get("error_description"), result.get("correlation_id")))
     print(result.get("error"))

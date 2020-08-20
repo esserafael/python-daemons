@@ -2,6 +2,7 @@
   "authority": "https://login.microsoftonline.com/b0e7335f-fd1f-46ad-98c7-55e6e4e222ea",
   "scope": [ "https://graph.microsoft.com/.default" ],
   "endpoint": "https://graph.microsoft.com/v1.0/users",
-  "endpoint_test": "https://graph.microsoft.com/beta/users/fe6be9e1-e6f4-4710-9b47-fd5d145cfae9?$select=displayName,signInActivity",
+  "endpoint_test": "https://graph.microsoft.com/beta/users/fe6be9e1-e6f4-4710-9b47-fd5d145cfae9?$select=displayName,mail,otherMails,mobilePhone,signInActivity",
+  "endpoint_test2": "https://graph.microsoft.com/beta/users?$filter=signInActivity/lastSignInDateTime le 2020-06-01T00:00:00Z&$select=displayName,mail,otherMails,mobilePhone,signInActivity",
   "logging_level": "INFO"
 }
