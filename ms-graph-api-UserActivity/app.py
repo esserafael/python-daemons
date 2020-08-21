@@ -27,6 +27,7 @@ import json
 import csv
 import logging
 import datetime
+import re
 
 import requests
 import msal
@@ -98,6 +99,8 @@ if "access_token" in result:
 
     csv_file_path = "auditSignIns_{0}_generated_{1}.csv".format(yesterday.strftime("%Y-%m-%d"), datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"))
 
+    logging.info("Creating CSV file '{0}'.".format(csv_file_path))
+
     with (open(csv_file_path, "w", newline='', encoding='utf-8')) as csv_file:
         csv_writer = csv.writer(csv_file)
         csv_writer.writerow([
@@ -130,6 +133,9 @@ if "access_token" in result:
             #print(json.dumps(graph_data, indent=2))
             with open('graph_data.json', 'w', encoding='utf-8') as f_json:
                 json.dump(graph_data, f_json, ensure_ascii=False, indent=4)
+            
+            logging.info("Appending current response paging up to row {0}, in CSV file.".format(
+                    (re.search("^.+_(\d+)$", graph_data["@odata.nextLink"]).group(1))))
 
             try:
                 with (open(csv_file_path, "a", newline='', encoding='utf-8')) as csv_file:
@@ -148,7 +154,6 @@ if "access_token" in result:
                             graph_data["location"]["state"],
                             graph_data["location"]["countryOrRegion"],
                             graph_data["status"]["errorCode"]))
-                logging.info("Graph response page saved at CSV file '{0}'.".format(csv_file_path))
             except:
                 logging.error("Exception while generating CSV file.")
         return
@@ -169,7 +174,7 @@ if "access_token" in result:
         #df.to_csv("test.csv", encoding='utf-8', index=False)
     '''
 
-    logging.info("Sending request do enpoint.")
+    logging.info("Sending request do endpoint.")
 
     graph_data = get_graph_data(endpoint_signIns)
     save_to_csv(graph_data)
@@ -204,6 +209,7 @@ if "access_token" in result:
                 graph_data["status"]["errorCode"])
             )'''
 
+     logging.info("Finished getting pages, everything exported to CSV file '{0}'.".format(csv_file_path))
         
 else:
     logging.error("{0}: {1} (correlation_id: {3})".format(result.get("error"), result.get("error_description"), result.get("correlation_id")))
