@@ -28,19 +28,20 @@ import csv
 import logging
 import datetime
 import re
+import pathlib
 
 import requests
 import msal
 
-import pandas as pd
-
+# Current script path
+current_wdpath = os.getcwd()
 
 # Logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("debug.log"),
+        logging.FileHandler(os.path.join(current_wdpath, "debug.log")),
         logging.StreamHandler()
     ]
 )
@@ -97,7 +98,12 @@ if "access_token" in result:
 
     logging.debug("Endpoint set as: '{0}'".format(endpoint_signIns))
 
-    csv_file_path = "auditSignIns_{0}_generated_{1}.csv".format(yesterday.strftime("%Y-%m-%d"), datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"))
+    output_files_fname = "output-files"
+
+    # Creates dir if does not exist.
+    pathlib.Path(os.path.join(current_wdpath, output_files_fname)).mkdir(exist_ok=True)
+
+    csv_file_path = os.path.join(current_wdpath, output_files_fname, "auditSignIns_{0}_generated_{1}.csv".format(yesterday.strftime("%Y-%m-%d"), datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")))
 
     logging.info("Creating CSV file '{0}'.".format(csv_file_path))
 
@@ -129,7 +135,6 @@ if "access_token" in result:
         if "error" in graph_data:
             logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
         else:
-            print("Graph API call result page")
             #print(json.dumps(graph_data, indent=2))
             with open('graph_data.json', 'w', encoding='utf-8') as f_json:
                 json.dump(graph_data, f_json, ensure_ascii=False, indent=4)
