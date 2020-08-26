@@ -10,3 +10,10 @@ To run the PowerShell script `ConvertTo-ExcelCustomReportHTML.ps1` (great name, 
 - In Launch and Activation Permissions, click "Edit Defaults" and add Network Service to it and give it "Local launch" and "Local Activation" permission. Do the same for <Machine_name>\Users
 
 And that should do the trick.
+
+
+### Thanks to these guys:
+
+[[Stack Overflow] Microsoft Office Excel cannot access the file](https://stackoverflow.com/questions/7106381/microsoft-office-excel-cannot-access-the-file-c-inetpub-wwwroot-timesheet-app)
+
+[[Microsoft Community] Issue with Powershell running through Task scheduler](https://answers.microsoft.com/en-us/windows/forum/all/issue-with-powershell-running-through-task/8d77b7fe-93a3-4363-8e8c-a6cd5deb0284)
