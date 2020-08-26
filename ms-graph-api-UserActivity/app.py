@@ -28,10 +28,10 @@ import json
 import csv
 import logging
 import datetime
-import dateutil
 import re
 import pathlib
 from shutil import copyfile
+from dateutil import parser, tz
 
 import requests
 import msal
@@ -91,7 +91,7 @@ if not result:
 if "access_token" in result:
 
     yesterday = datetime.datetime.today() - datetime.timedelta(days=1)
-    here_tz = dateutil.tz.tzlocal()
+    here_tz = tz.tzlocal()
     
     #request_filter = "filter=createdDateTime ge 2020-08-19T03:00:00Z and createdDateTime le 2020-08-20T03:00:00Z"
     request_filter = "filter=createdDateTime ge 2020-08-{0}T03:00:00Z and createdDateTime le 2020-08-{1}T03:00:00Z".format(
@@ -193,7 +193,7 @@ if "access_token" in result:
         try:
             with (open(html_file_path, "a", newline='', encoding='utf-8')) as html_file:
                 for graph_data in graph_data["value"]:
-                    converted_dt = dateutil.parser.parse(graph_data["createdDateTime"])
+                    converted_dt = parser.parse(graph_data["createdDateTime"])
 
                     html_file.write(
                         f"""
