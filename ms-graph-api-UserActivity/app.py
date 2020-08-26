@@ -23,18 +23,21 @@ You can then run this sample with a JSON configuration file:
 
 import os
 import sys  # For simplicity, we'll read config file from 1st CLI param sys.argv[1]
+import subprocess
 import json
 import csv
 import logging
 import datetime
+import dateutil
 import re
 import pathlib
+from shutil import copyfile
 
 import requests
 import msal
 
 # Current script path
-current_wdpath = os.getcwd()
+current_wdpath = os.path.dirname(__file__)
 
 # Logging
 logging.basicConfig(
@@ -62,7 +65,7 @@ if not client_secret:
 else:
     logging.info("client_secret found.")
 
-config = json.load(open(sys.argv[1])) 
+config = json.load(open(sys.argv[1]))
 
 # Create a preferably long-lived app instance which maintains a token cache.
 app = msal.ConfidentialClientApplication(
@@ -88,6 +91,7 @@ if not result:
 if "access_token" in result:
 
     yesterday = datetime.datetime.today() - datetime.timedelta(days=1)
+    here_tz = dateutil.tz.tzlocal()
     
     #request_filter = "filter=createdDateTime ge 2020-08-19T03:00:00Z and createdDateTime le 2020-08-20T03:00:00Z"
     request_filter = "filter=createdDateTime ge 2020-08-{0}T03:00:00Z and createdDateTime le 2020-08-{1}T03:00:00Z".format(
@@ -103,79 +107,151 @@ if "access_token" in result:
     # Creates dir if does not exist.
     pathlib.Path(os.path.join(current_wdpath, output_files_fname)).mkdir(exist_ok=True)
 
+    header_columns = [
+        "Nome",
+        "E-mailUniasselvi",
+        "DataDeEntrada",
+        "AplicativoMicrosoft",
+        "AplicativoClienteUtilizado",
+        "Navegador",
+        "SistemaOperacional",
+        "IPAddress",
+        "Cidade",
+        "Estado",
+        "País"
+    ]
+
+    # HTML File
+    html_template_path = os.path.join(current_wdpath, "template.html")
+    html_file_path = os.path.join(current_wdpath, output_files_fname, "auditSignIns_{0}_generated_{1}.html".format(yesterday.strftime("%Y-%m-%d"), datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")))
+
+    copyfile(html_template_path, html_file_path)
+
+    logging.info("Creating column headers in HTML file '{0}'.".format(html_file_path))
+
+    with (open(html_file_path, "a", newline='', encoding='utf-8')) as html_file:
+        html_file.write("<tr class=header>")    
+        for header_name in header_columns:
+            html_file.write(f"<td>{header_name}</td>")
+        html_file.write("</tr>")
+    
+
+    # CSV File
     csv_file_path = os.path.join(current_wdpath, output_files_fname, "auditSignIns_{0}_generated_{1}.csv".format(yesterday.strftime("%Y-%m-%d"), datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")))
 
-    logging.info("Creating CSV file '{0}'.".format(csv_file_path))
+    logging.info("Creating header row in CSV file '{0}'.".format(csv_file_path))
 
     with (open(csv_file_path, "w", newline='', encoding='utf-8')) as csv_file:
         csv_writer = csv.writer(csv_file)
-        csv_writer.writerow([
-            "Nome",
-            "E-mailUniasselvi",
-            "DataDeEntrada",
-            "AplicativoMicrosoft",
-            "AplicativoClienteUtilizado",
-            "Navegador",
-            "SistemaOperacional",
-            "IPAddress",
-            "Cidade",
-            "Estado",
-            "País",
-            "StatusDaEntrada"
-        ])
+        csv_writer.writerow(header_columns)
 
     def get_graph_data(endpoint):
         graph_data = requests.get(  # Use token to call downstream service
         endpoint,
         headers={'Authorization': 'Bearer ' + result['access_token']}, ).json()
 
+        if "error" in graph_data:            
+            logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
+        else:        
+            if "@odata.nextLink" in graph_data:
+                logging.info("Processing the current response page, up to row {0}.".format(
+                        (re.search("^.+_(\d+)$", graph_data["@odata.nextLink"]).group(1))))
+            else:
+                logging.info("Processing the last response page.")
+
         return graph_data
     
     def save_to_csv(graph_data):
-        if "error" in graph_data:
-            logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
-        else:
-            #print(json.dumps(graph_data, indent=2))
-            with open('graph_data.json', 'w', encoding='utf-8') as f_json:
-                json.dump(graph_data, f_json, ensure_ascii=False, indent=4)
-            
-            if "@odata.nextLink" in graph_data:
-                logging.info("Appending in CSV file the current response page, up to row {0}.".format(
-                        (re.search("^.+_(\d+)$", graph_data["@odata.nextLink"]).group(1))))
-            else:
-                logging.info("Appending in CSV file the last response page.")
+        #print(json.dumps(graph_data, indent=2))
+        with open('graph_data.json', 'w', encoding='utf-8') as f_json:
+            json.dump(graph_data, f_json, ensure_ascii=False, indent=4)
 
-            try:
-                with (open(csv_file_path, "a", newline='', encoding='utf-8')) as csv_file:
-                    csv_writer = csv.writer(csv_file)
-                    for graph_data in graph_data["value"]:
-                        csv_writer.writerow((
-                            graph_data["userDisplayName"],
-                            graph_data["userPrincipalName"],
-                            graph_data["createdDateTime"],
-                            graph_data["appDisplayName"],
-                            graph_data["clientAppUsed"],
-                            graph_data["deviceDetail"]["browser"],
-                            graph_data["deviceDetail"]["operatingSystem"],
-                            graph_data["ipAddress"],
-                            graph_data["location"]["city"],
-                            graph_data["location"]["state"],
-                            graph_data["location"]["countryOrRegion"],
-                            graph_data["status"]["errorCode"]))
-            except:
-                logging.error("Exception while generating CSV file.")
+        try:
+            with (open(csv_file_path, "a", newline='', encoding='utf-8')) as csv_file:
+                csv_writer = csv.writer(csv_file)
+                for graph_data in graph_data["value"]:
+                    csv_writer.writerow((
+                        graph_data["userDisplayName"],
+                        graph_data["userPrincipalName"],
+                        graph_data["createdDateTime"],
+                        graph_data["appDisplayName"],
+                        graph_data["clientAppUsed"],
+                        graph_data["deviceDetail"]["browser"],
+                        graph_data["deviceDetail"]["operatingSystem"],
+                        graph_data["ipAddress"],
+                        graph_data["location"]["city"],
+                        graph_data["location"]["state"],
+                        graph_data["location"]["countryOrRegion"]
+                    ))
+
+            logging.info("CSV file appended.")
+        except Exception as e:
+            logging.error(f"Exception while generating CSV file: {str(e)}")            
+        return
+
+    def save_to_html(graph_data):
+        try:
+            with (open(html_file_path, "a", newline='', encoding='utf-8')) as html_file:
+                for graph_data in graph_data["value"]:
+                    converted_dt = dateutil.parser.parse(graph_data["createdDateTime"])
+
+                    html_file.write(
+                        f"""
+<tr>
+<td>{graph_data['userDisplayName']}</td> 
+<td>{graph_data['userPrincipalName']}</td> 
+<td class=date>{converted_dt.astimezone(here_tz).strftime("%Y-%m-%d %H:%M:%S,%f")}</td>
+<td>{graph_data['appDisplayName']}</td> 
+<td>{graph_data['clientAppUsed']}</td> 
+<td>{graph_data['deviceDetail']['browser']}</td> 
+<td>{graph_data['deviceDetail']['operatingSystem']}</td> 
+<td>&nbsp;{graph_data['ipAddress']}</td> 
+<td>{graph_data['location']['city']}</td> 
+<td>{graph_data['location']['state']}</td> 
+<td>{graph_data['location']['countryOrRegion']}</td> 
+</tr>
+""")
+
+            logging.info("HTML file appended.")                    
+        except Exception as e:
+            logging.error(f"Exception while generating HTML file: {str(e)}")
         return
 
     logging.info("Sending request do endpoint.")
 
     graph_data = get_graph_data(endpoint_signIns)
+    save_to_html(graph_data)
     save_to_csv(graph_data)
 
-    while "@odata.nextLink" in graph_data:
+    while "@odata.nextLink" in graph_data:        
         graph_data = get_graph_data(graph_data["@odata.nextLink"])
+        save_to_html(graph_data)
         save_to_csv(graph_data)
 
+    # Close html file.
+    with (open(html_file_path, "a", newline='', encoding='utf-8')) as html_file:
+        html_file.write("</table></body></html>")
+
     logging.info("Finished getting result pages, everything exported to CSV file '{0}'.".format(csv_file_path))
+
+    # Send to PowerShell to convert to Excel and send by e-mail.
+    ps_script_path = os.path.join(current_wdpath, "ConvertTo-ExcelCustomReportHTML.ps1")
+    #ps_html_path = os.path.join(current_wdpath, "teste.html")
+    ps_xlsx_path = os.path.join(current_wdpath, output_files_fname, f"AuditoriaEntrada_{yesterday.strftime('%d-%m-%Y')}_Completo.xlsx")
+
+    ps_arg = f"{ps_script_path} -HtmlPath {html_file_path} -XlsxPath {ps_xlsx_path}"
+
+    try:
+        subprocess.Popen([
+            "powershell.exe",
+            f"{ps_arg}"
+            ])
+        
+        logging.info(f"Calling PowerShell to finish the job: {ps_arg}")
+
+    except Exception as e:
+        logging.error(f"Exception while calling PowerShell: {str(e)}")
+
         
 else:
     logging.error("{0}: {1} (correlation_id: {3})".format(result.get("error"), result.get("error_description"), result.get("correlation_id")))
