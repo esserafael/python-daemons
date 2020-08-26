@@ -25,7 +25,7 @@ function Write-LocalLog
 	)
 	
 	$DateTimeNow = Get-Date -f "yyyy/MM/dd HH:mm:ss.fff"
-	Add-Content -Path $LogPath -Value "$($DateTimeNow) - $($Text)."
+	Add-Content -Path $LogPath -Value "$($DateTimeNow) - $($Text)"
 }
 
 $ScriptPath = Split-Path ($MyInvocation.MyCommand.Path)
@@ -38,12 +38,13 @@ try
 	$Excel = New-Object -ComObject Excel.Application
 	Write-LocalLog -Text "Excel COM Object created."
 	
+	Write-LocalLog -Text "Opening html file: '$($HtmlPath)'."
 	$Excel.Workbooks.Open($HtmlPath)
-	Write-LocalLog -Text "Html file opened: $($HtmlPath)"
+	Write-LocalLog -Text "Html file opened."
 	
-	#($Excel.Workbooks[1]).Activate()
+	Write-LocalLog -Text "Saving Xlsx file: '$($XlsxPath)'."
 	$Excel.ActiveWorkbook.SaveAs($XlsxPath, 51)
-	Write-LocalLog -Text "Xlsx file saved: '$($XlsxPath)'."
+	Write-LocalLog -Text "Xlsx file saved."
 	
 	$Excel.ActiveWorkbook.Close($false)
 	$Excel.Quit()
