@@ -45,7 +45,7 @@ try
 	$Excel.ActiveWorkbook.SaveAs($XlsxPath, 51)
 	Write-LocalLog -Text "Xlsx file saved: '$($XlsxPath)'."
 	
-	$Excel.ActiveWorkbook.Close()
+	$Excel.ActiveWorkbook.Close($false)
 	$Excel.Quit()
 	
 	[System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel)
