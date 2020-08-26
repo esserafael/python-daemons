@@ -11,13 +11,42 @@
 		Creates an Excel spreadsheet using a custom CSV report to send daily by e-mail.
 #>
 
-### Set input and output path
-$InputHTML = "C:\Users\07574534900\Dropbox\1 - Uniasselvi\Scripts\GitHub\python-daemons\ms-graph-api-UserActivity\teste.html"
-$OutputXLSX = "C:\Users\07574534900\Dropbox\1 - Uniasselvi\Scripts\GitHub\python-daemons\ms-graph-api-UserActivity\teste2.xlsx"
+Param (
+	[Parameter(Mandatory = $true)]
+	[String]$HtmlPath,
+	[Parameter(Mandatory = $true)]
+	[String]$XlsxPath
+)
 
-$Excel = New-Object -ComObject Excel.Application
-$Excel.Workbooks.Open($InputHTML)
-#($Excel.Workbooks[1]).Activate()
-$Excel.ActiveWorkbook.SaveAs($OutputXLSX, 51)
-$Excel.ActiveWorkbook.Close()
-$Excel.Quit()
+function Write-LocalLog
+{
+	Param (
+		[String]$Text
+	)
+	
+	$DateTimeNow = Get-Date -f "yyyy/MM/dd HH:mm:ss.fff"
+	Add-Content -Path $LogPath -Value "$($DateTimeNow) - $($Text)."
+}
+
+$ScriptPath = Split-Path ($MyInvocation.MyCommand.Path)
+$LogPath = "$($ScriptPath)\debug_PS.log"
+
+Write-LocalLog -Text "Script started."
+
+try
+{
+	$Excel = New-Object -ComObject Excel.Application
+	$Excel.Workbooks.Open($HtmlPath)
+	#($Excel.Workbooks[1]).Activate()
+	$Excel.ActiveWorkbook.SaveAs($XlsxPath, 51)
+	$Excel.ActiveWorkbook.Close()
+	$Excel.Quit()
+	
+	taskkill /im EXCEL.EXE /f
+	
+	Write-LocalLog -Text "Conversion completed."
+}
+catch
+{
+	Write-LocalLog -Text "Error in conversion: $($_.Exception.Message)"
+}
