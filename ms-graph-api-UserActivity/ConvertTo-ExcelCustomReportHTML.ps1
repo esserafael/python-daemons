@@ -5,10 +5,10 @@
 	 Created on:   	24/08/2020 11:31
 	 Created by:   	07574534900 - Rafael Feustel
 	 Organization: 	Uniasselvi
-	 Filename:     	ConvertTo-ExcelCustomReport.ps1
+	 Filename:     	ConvertTo-ExcelCustomReportHTML.ps1
 	===========================================================================
 	.DESCRIPTION
-		Creates an Excel spreadsheet using a custom CSV report to send daily by e-mail.
+		Creates an Excel file (XLSX) using a custom Html file/report and send daily by e-mail.
 #>
 
 Param (
@@ -36,13 +36,19 @@ Write-LocalLog -Text "Script started."
 try
 {
 	$Excel = New-Object -ComObject Excel.Application
+	Write-LocalLog -Text "Excel COM Object created."
+	
 	$Excel.Workbooks.Open($HtmlPath)
+	Write-LocalLog -Text "Html file opened: $($HtmlPath)"
+	
 	#($Excel.Workbooks[1]).Activate()
 	$Excel.ActiveWorkbook.SaveAs($XlsxPath, 51)
+	Write-LocalLog -Text "Xlsx file saved: '$($XlsxPath)'."
+	
 	$Excel.ActiveWorkbook.Close()
 	$Excel.Quit()
 	
-	taskkill /im EXCEL.EXE /f
+	[System.Runtime.InteropServices.Marshal]::ReleaseComObject($Excel)
 	
 	Write-LocalLog -Text "Conversion completed."
 }
