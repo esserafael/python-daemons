@@ -23,7 +23,7 @@ You can then run this sample with a JSON configuration file:
 
 import os
 import sys  # For simplicity, we'll read config file from 1st CLI param sys.argv[1]
-import subprocess
+import subprocess, sys
 import json
 import csv
 import logging
@@ -35,112 +35,154 @@ import glob
 import requests
 import msal
 
-# Current script path
-current_wdpath = os.path.dirname(__file__)
+import asyncio
+import time
 
-cache_file_folder = "cache-files"
+async def call_ps(ps_args):
+    try:
+        p = subprocess.Popen([
+            "powershell.exe", f"{ps_args}"],
+            stdout=subprocess.PIPE)
+        output, err = p.communicate()
+        return output
 
-if(os.path.exists(cache_file_folder)):
-    # Clears the cache folder
-    files = glob.glob(f"{cache_file_folder}/*")
-    for f in files:
-        os.remove(f)
-else:
-    # Creates the cache folder if does not exist.
-    pathlib.Path(cache_file_folder).mkdir(exist_ok=True)
+    except Exception as e:
+        logging.error(f"Exception while calling PowerShell: {str(e)}")
+        return None
+
+async def get_graph_data(endpoint, result):
+    graph_data = requests.get(  # Use token to call downstream service
+    endpoint,
+    headers={'Authorization': 'Bearer ' + result['access_token']}, )
+
+    if "error" in graph_data:            
+        logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
+        return None
+    else:        
+        return graph_data
+
+async def get_token():
+    client_id = os.getenv("daemon_client_id2")
+    if not client_id:
+        errmsg = "Define daemon_client_id2 environment variable"
+        logging.error(errmsg)
+        raise ValueError(errmsg)    
+    else:
+        logging.info("client_id found -> '{0}'.".format(client_id))
+
+    client_secret = os.getenv("daemon_client_secret2")
+    if not client_secret:
+        errmsg = "Define daemon_client_secret2 environment variable"
+        logging.error(errmsg)
+        raise ValueError(errmsg)
+    else:
+        logging.info("client_secret found.")
 
 
-# Logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(os.path.join(current_wdpath, "debug.log")),
-        logging.StreamHandler()
-    ]
-)
+    # Create a preferably long-lived app instance which maintains a token cache.
+    app = msal.ConfidentialClientApplication(
+        client_id, authority=config["authority"],
+        client_credential=client_secret,
+        # token_cache=...  # Default cache is in memory only.
+                        # You can learn how to use SerializableTokenCache from
+                        # https://msal-python.rtfd.io/en/latest/#msal.SerializableTokenCache
+        )
 
-client_id = os.getenv("daemon_client_id2")
-if not client_id:
-    errmsg = "Define daemon_client_id2 environment variable"
-    logging.error(errmsg)
-    raise ValueError(errmsg)    
-else:
-    logging.info("client_id found -> '{0}'.".format(client_id))
+    # The pattern to acquire a token looks like this.
+    result = None
 
-client_secret = os.getenv("daemon_client_secret2")
-if not client_secret:
-    errmsg = "Define daemon_client_secret2 environment variable"
-    logging.error(errmsg)
-    raise ValueError(errmsg)
-else:
-    logging.info("client_secret found.")
+    # Firstly, looks up a token from cache
+    # Since we are looking for token for the current app, NOT for an end user,
+    # notice we give account parameter as None.
+    result = app.acquire_token_silent(config["scope"], account=None)
 
-config = json.load(open(sys.argv[1]))
+    if not result:
+        logging.info("No token exists in cache. Getting a new one from AzureAD.")
+        result = app.acquire_token_for_client(scopes=config["scope"])
+    
+    return result
 
-# Create a preferably long-lived app instance which maintains a token cache.
-app = msal.ConfidentialClientApplication(
-    client_id, authority=config["authority"],
-    client_credential=client_secret,
-    # token_cache=...  # Default cache is in memory only.
-                       # You can learn how to use SerializableTokenCache from
-                       # https://msal-python.rtfd.io/en/latest/#msal.SerializableTokenCache
-    )
 
-# The pattern to acquire a token looks like this.
-result = None
+async def set_user_pic(idx, user, token):
 
-# Firstly, looks up a token from cache
-# Since we are looking for token for the current app, NOT for an end user,
-# notice we give account parameter as None.
-result = app.acquire_token_silent(config["scope"], account=None)
-
-if not result:
-    logging.info("No token exists in cache. Getting a new one from AzureAD.")
-    result = app.acquire_token_for_client(scopes=config["scope"])
-
-if "access_token" in result:
-
-    endpoint_ProfilePic = f"{config['endpoint_ProfilePic']}/a.sky@uniasselvi.com.br/photos/96x96/$value"
-
-    logging.debug(f"Endpoint set as: '{endpoint_ProfilePic}'")
-
-    def get_graph_data(endpoint):
-        graph_data = requests.get(  # Use token to call downstream service
-        endpoint,
-        headers={'Authorization': 'Bearer ' + result['access_token']}, )
-
-        if "error" in graph_data:            
-            logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
-        else:        
-            return graph_data    
-
-    graph_data = get_graph_data(endpoint_ProfilePic)
+    endpoint_ProfilePic = f"{config['endpoint_ProfilePic']}/{user['UserPrincipalName']}/photos/{config['pic_size']}/$value"     
+    graph_data = await get_graph_data(endpoint_ProfilePic, token)
 
     if graph_data.status_code == 200:
 
-        cache_file_name = f"{os.path.join(cache_file_folder, str(uuid.uuid4()))}"
+        logging.info(f"Setting picture for user {user['UserPrincipalName']}.")
 
-        with (open(cache_file_name, "wb")) as cache_file:
-            cache_file.write(graph_data.content)
-
-        ps_arg = f"Set-ADUser -Identity 38559063277 -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server asl-ad04"
+        #await(asyncio.sleep(2))       
 
         try:
-            subprocess.Popen([
-                "powershell.exe",
-                f"{ps_arg}"
-                ])
-            
-            logging.info(f"Calling PowerShell to finish the job: {ps_arg}")
-
+            cache_file_name = None
+            cache_file_name = f"{os.path.join(cache_file_folder, str(idx))}.jpg"
         except Exception as e:
-            logging.error(f"Exception while calling PowerShell: {str(e)}")
+            logging.error(f"Exception while generating cache file name: {str(e)}")
+
+        if None != cache_file_name:
+
+            with (open(cache_file_name, "wb")) as cache_file:
+                cache_file.write(graph_data.content)
+            
+            logging.info(f"Set picture for user {user['UserPrincipalName']}.")
+
+            #call_ps(f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server asl-ad04")
+
+async def main():
+
+    if(os.path.exists(cache_file_folder)):
+        # Clears the cache folder
+        files = glob.glob(f"{cache_file_folder}/*")
+        for f in files:
+            os.remove(f)
+    else:
+        # Creates the cache folder if does not exist.
+        pathlib.Path(cache_file_folder).mkdir(exist_ok=True)
+
+    token = await get_token()
+
+    if "access_token" in token:        
+        #ad_users = json.loads(call_ps("Get-ADUser -Filter {UserPrincipalName -eq \"a.sky@uniasselvi.com.br\" -or UserPrincipalName -eq \"teste.rhad@uniasselvi.com.br\"} | Select-Object SamAccountName, UserPrincipalName | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
+        ad_users = json.loads(await call_ps("Get-ADUser -Filter * -SearchBase \"OU=Gente e Gestão,OU=Operacao EAD,OU=NEAD,OU=Unidades,DC=grupouniasselvi,DC=local\" | Select-Object SamAccountName, UserPrincipalName | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
+
+        tasks = []
+
+        for idx, user in enumerate(ad_users):
+            print(user)
+            tasks.append(asyncio.create_task(set_user_pic(idx, user, token)))
+            #asyncio.ensure_future(set_user_pic(idx, user, token))
+
+        #await asyncio.gather(*tasks)
+    else:
+        logging.error("{0}: {1} (correlation_id: {3})".format(token.get("error"), token.get("error_description"), token.get("correlation_id")))
+        print(token.get("error"))
+        print(token.get("error_description"))
+        print(token.get("correlation_id"))  # You may need this when reporting a bug
 
 
-else:
-    logging.error("{0}: {1} (correlation_id: {3})".format(result.get("error"), result.get("error_description"), result.get("correlation_id")))
-    print(result.get("error"))
-    print(result.get("error_description"))
-    print(result.get("correlation_id"))  # You may need this when reporting a bug
+if __name__ == "__main__":
+    import time
 
+    config = json.load(open(sys.argv[1]))
+
+    # Current script path
+    current_wdpath = os.path.dirname(__file__)
+    cache_file_folder = "cache-files"
+
+    # Logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler(os.path.join(current_wdpath, "debug.log")),
+            logging.StreamHandler()
+        ]
+    )   
+
+    s = time.perf_counter()
+    asyncio.run(main())
+    #loop = asyncio.get_event_loop()
+    #loop.run_until_complete(main())
+    elapsed = time.perf_counter() - s
+    print(f"Executed in {elapsed:0.2f} seconds.")
