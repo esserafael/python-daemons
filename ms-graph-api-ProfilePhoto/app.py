@@ -33,6 +33,7 @@ import pathlib
 import glob
 
 import requests
+import aiohttp
 import msal
 
 import asyncio
@@ -50,16 +51,12 @@ async def call_ps(ps_args):
         logging.error(f"Exception while calling PowerShell: {str(e)}")
         return None
 
-async def get_graph_data(endpoint, result):
-    graph_data = requests.get(  # Use token to call downstream service
-    endpoint,
-    headers={'Authorization': 'Bearer ' + result['access_token']}, )
-
-    if "error" in graph_data:            
-        logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
-        return None
-    else:        
-        return graph_data
+async def get_graph_data(endpoint, token, session):
+    async with session.get(
+        endpoint,
+        headers={'Authorization': 'Bearer ' + token['access_token']}, ) as graph_data:
+            print(graph_data)
+            return graph_data
 
 async def get_token():
     client_id = os.getenv("daemon_client_id2")
@@ -103,17 +100,11 @@ async def get_token():
     return result
 
 
-async def set_user_pic(idx, user, token):
-
-    endpoint_ProfilePic = f"{config['endpoint_ProfilePic']}/{user['UserPrincipalName']}/photos/{config['pic_size']}/$value"     
-    graph_data = await get_graph_data(endpoint_ProfilePic, token)
-
-    if graph_data.status_code == 200:
-
+async def set_user_pic(idx, user, token, session):
+    endpoint_ProfilePic = f"{config['endpoint_ProfilePic']}/{user['UserPrincipalName']}/photos/{config['pic_size']}/$value"
+    graph_data = await get_graph_data(endpoint_ProfilePic, token, session)    
+    if graph_data.status == 200:
         logging.info(f"Setting picture for user {user['UserPrincipalName']}.")
-
-        #await(asyncio.sleep(2))       
-
         try:
             cache_file_name = None
             cache_file_name = f"{os.path.join(cache_file_folder, str(idx))}.jpg"
@@ -124,10 +115,19 @@ async def set_user_pic(idx, user, token):
 
             with (open(cache_file_name, "wb")) as cache_file:
                 cache_file.write(graph_data.content)
-            
-            logging.info(f"Set picture for user {user['UserPrincipalName']}.")
 
             #call_ps(f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server asl-ad04")
+
+
+async def set_all_users_pics(ad_users, token):
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        for idx, user in enumerate(ad_users):
+            print(user)
+            task = asyncio.ensure_future(set_user_pic(idx, user, token, session))
+            tasks.append(task)
+        await asyncio.gather(*tasks, return_exceptions=True)
+
 
 async def main():
 
@@ -146,14 +146,7 @@ async def main():
         #ad_users = json.loads(call_ps("Get-ADUser -Filter {UserPrincipalName -eq \"a.sky@uniasselvi.com.br\" -or UserPrincipalName -eq \"teste.rhad@uniasselvi.com.br\"} | Select-Object SamAccountName, UserPrincipalName | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
         ad_users = json.loads(await call_ps("Get-ADUser -Filter * -SearchBase \"OU=Gente e Gestão,OU=Operacao EAD,OU=NEAD,OU=Unidades,DC=grupouniasselvi,DC=local\" | Select-Object SamAccountName, UserPrincipalName | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
 
-        tasks = []
-
-        for idx, user in enumerate(ad_users):
-            print(user)
-            tasks.append(asyncio.create_task(set_user_pic(idx, user, token)))
-            #asyncio.ensure_future(set_user_pic(idx, user, token))
-
-        #await asyncio.gather(*tasks)
+        await set_all_users_pics(ad_users, token)
     else:
         logging.error("{0}: {1} (correlation_id: {3})".format(token.get("error"), token.get("error_description"), token.get("correlation_id")))
         print(token.get("error"))
@@ -181,8 +174,8 @@ if __name__ == "__main__":
     )   
 
     s = time.perf_counter()
-    asyncio.run(main())
-    #loop = asyncio.get_event_loop()
+    #asyncio.run(main())
+    asyncio.get_event_loop().run_until_complete(main())
     #loop.run_until_complete(main())
     elapsed = time.perf_counter() - s
     print(f"Executed in {elapsed:0.2f} seconds.")
