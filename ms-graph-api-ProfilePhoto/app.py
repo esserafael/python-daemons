@@ -31,6 +31,8 @@ import datetime
 import uuid
 import pathlib
 import glob
+import uuid
+import threading
 
 import requests
 import aiohttp
@@ -39,7 +41,9 @@ import msal
 import asyncio
 import time
 
+    
 async def call_ps(ps_args):
+    logging.info(f"Running PS: {ps_args}")
     try:
         p = subprocess.Popen([
             "powershell.exe", f"{ps_args}"],
@@ -56,7 +60,10 @@ async def get_graph_data(endpoint, token, session):
         endpoint,
         headers={'Authorization': 'Bearer ' + token['access_token']}, ) as graph_data:
             print(graph_data)
-            return graph_data
+            if graph_data.status == 200:
+                return await graph_data.read()
+            else:
+                return None
 
 async def get_token():
     client_id = os.getenv("daemon_client_id2")
@@ -100,33 +107,55 @@ async def get_token():
     return result
 
 
-async def set_user_pic(idx, user, token, session):
+async def set_user_pic(user, token, session):
     endpoint_ProfilePic = f"{config['endpoint_ProfilePic']}/{user['UserPrincipalName']}/photos/{config['pic_size']}/$value"
-    graph_data = await get_graph_data(endpoint_ProfilePic, token, session)    
-    if graph_data.status == 200:
+    graph_data = await get_graph_data(endpoint_ProfilePic, token, session)
+
+    if None != graph_data:
         logging.info(f"Setting picture for user {user['UserPrincipalName']}.")
         try:
             cache_file_name = None
-            cache_file_name = f"{os.path.join(cache_file_folder, str(idx))}.jpg"
+            cache_file_name = f"{os.path.join(cache_file_folder, str(uuid.uuid4()))}.jpg"
         except Exception as e:
             logging.error(f"Exception while generating cache file name: {str(e)}")
 
         if None != cache_file_name:
 
             with (open(cache_file_name, "wb")) as cache_file:
-                cache_file.write(graph_data.content)
+                cache_file.write(graph_data)
 
-            #call_ps(f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server asl-ad04")
+            CREATE_NEW_CONSOLE =  0x00000010
+            
+            #ps_args = f"Start-Process powershell.exe -ArgumentList \"Add-Content\", \"Xunda.txt\", \"-Value\", \"Xunda\""
+            ps_args = f"Add-Content Xunda.txt -Value '{user['UserPrincipalName']}'"
+            #ps_args = f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server asl-ad04"
+            #await call_ps(ps_args)
+            #await call_ps(f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server asl-ad04")
+
+           
+
+            #os.system(ps_args)
+            p = subprocess.Popen([
+                "powershell.exe", f"{ps_args}"], creationflags=CREATE_NEW_CONSOLE)
+            #p.communicate()
+            #return ps_args
 
 
 async def set_all_users_pics(ad_users, token):
     async with aiohttp.ClientSession() as session:
         tasks = []
-        for idx, user in enumerate(ad_users):
+        for user in ad_users:
             print(user)
-            task = asyncio.ensure_future(set_user_pic(idx, user, token, session))
+            task = asyncio.ensure_future(set_user_pic(user, token, session))
             tasks.append(task)
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        #ps_args = [r for r in results if r]
+        #ps_tasks = []
+        #for ps_arg in ps_args:
+        #    ps_task = asyncio.ensure_future(call_ps(ps_arg))
+        #    ps_tasks.append(ps_task)
+        #await asyncio.gather(*ps_tasks, return_exceptions=True)
 
 
 async def main():
@@ -145,6 +174,7 @@ async def main():
     if "access_token" in token:        
         #ad_users = json.loads(call_ps("Get-ADUser -Filter {UserPrincipalName -eq \"a.sky@uniasselvi.com.br\" -or UserPrincipalName -eq \"teste.rhad@uniasselvi.com.br\"} | Select-Object SamAccountName, UserPrincipalName | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
         ad_users = json.loads(await call_ps("Get-ADUser -Filter * -SearchBase \"OU=Gente e Gestão,OU=Operacao EAD,OU=NEAD,OU=Unidades,DC=grupouniasselvi,DC=local\" | Select-Object SamAccountName, UserPrincipalName | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
+        #ad_users = json.loads(await call_ps("Get-ADUser -Filter * -SearchBase \"OU=NEAD,OU=Unidades,DC=grupouniasselvi,DC=local\" | Select-Object SamAccountName, UserPrincipalName | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
 
         await set_all_users_pics(ad_users, token)
     else:
