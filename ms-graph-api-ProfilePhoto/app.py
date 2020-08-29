@@ -43,7 +43,7 @@ import time
 
     
 async def call_ps(ps_args):
-    logging.info(f"Running PS: {ps_args}")
+    logging.info(f"Calling PS command: {ps_args}")
     try:
         p = subprocess.Popen([
             "powershell.exe", f"{ps_args}"],
@@ -124,19 +124,20 @@ async def set_user_pic(user, token, session):
             with (open(cache_file_name, "wb")) as cache_file:
                 cache_file.write(graph_data)
 
-            CREATE_NEW_CONSOLE =  0x00000010
+            #CREATE_NEW_CONSOLE =  0x00000010
             
             #ps_args = f"Start-Process powershell.exe -ArgumentList \"Add-Content\", \"Xunda.txt\", \"-Value\", \"Xunda\""
-            ps_args = f"Add-Content Xunda.txt -Value '{user['UserPrincipalName']}'"
-            #ps_args = f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server asl-ad04"
+            #ps_args = f"Add-Content Xunda.txt -Value '{user['UserPrincipalName']}'"
+            ps_args = f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server asl-ad04\n"
             #await call_ps(ps_args)
             #await call_ps(f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server asl-ad04")
 
-           
+            with open(ps_file_name, "a") as ps_file:
+                ps_file.write(ps_args)     
 
             #os.system(ps_args)
-            p = subprocess.Popen([
-                "powershell.exe", f"{ps_args}"], creationflags=CREATE_NEW_CONSOLE)
+            #p = subprocess.Popen([
+            #    "powershell.exe", f"{ps_args}"], creationflags=CREATE_NEW_CONSOLE)
             #p.communicate()
             #return ps_args
 
@@ -148,8 +149,11 @@ async def set_all_users_pics(ad_users, token):
             print(user)
             task = asyncio.ensure_future(set_user_pic(user, token, session))
             tasks.append(task)
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
 
+        logging.info("Starting PowerShell processing, this may take a while.")
+        await call_ps(f"Get-Content {ps_file_name} | ForEach-Object {{Invoke-Expression $_}}")
+        logging.info("Finished PowerShell processing.")
         #ps_args = [r for r in results if r]
         #ps_tasks = []
         #for ps_arg in ps_args:
@@ -171,7 +175,7 @@ async def main():
 
     token = await get_token()
 
-    if "access_token" in token:        
+    if "access_token" in token:      
         #ad_users = json.loads(call_ps("Get-ADUser -Filter {UserPrincipalName -eq \"a.sky@uniasselvi.com.br\" -or UserPrincipalName -eq \"teste.rhad@uniasselvi.com.br\"} | Select-Object SamAccountName, UserPrincipalName | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
         ad_users = json.loads(await call_ps("Get-ADUser -Filter * -SearchBase \"OU=Gente e Gestão,OU=Operacao EAD,OU=NEAD,OU=Unidades,DC=grupouniasselvi,DC=local\" | Select-Object SamAccountName, UserPrincipalName | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
         #ad_users = json.loads(await call_ps("Get-ADUser -Filter * -SearchBase \"OU=NEAD,OU=Unidades,DC=grupouniasselvi,DC=local\" | Select-Object SamAccountName, UserPrincipalName | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
@@ -192,6 +196,7 @@ if __name__ == "__main__":
     # Current script path
     current_wdpath = os.path.dirname(__file__)
     cache_file_folder = "cache-files"
+    ps_file_name = f"{os.path.join(cache_file_folder, str(uuid.uuid4()))}"
 
     # Logging
     logging.basicConfig(
@@ -208,4 +213,4 @@ if __name__ == "__main__":
     asyncio.get_event_loop().run_until_complete(main())
     #loop.run_until_complete(main())
     elapsed = time.perf_counter() - s
-    print(f"Executed in {elapsed:0.2f} seconds.")
+    logging.info(f"Script finished, executed in {elapsed:0.2f} seconds.")
