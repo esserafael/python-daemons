@@ -143,6 +143,8 @@ cython_debug/
 # Xunda
 /flask_session
 /quart_session
+cache-files/
+output-files/
 *.xunda
 *.crt
 *.csr
