@@ -94,9 +94,7 @@ if "access_token" in result:
     here_tz = tz.tzlocal()
     
     #request_filter = "filter=createdDateTime ge 2020-08-19T03:00:00Z and createdDateTime le 2020-08-20T03:00:00Z"
-    request_filter = "filter=createdDateTime ge 2020-08-{0}T03:00:00Z and createdDateTime le 2020-08-{1}T03:00:00Z".format(
-        yesterday.strftime("%d"),
-        datetime.datetime.today().strftime("%d"))    
+    request_filter = f"filter=createdDateTime ge {yesterday.strftime('%Y-%m-%d')}T03:00:00Z and createdDateTime le {datetime.datetime.today().strftime('%Y-%m-%d')}T03:00:00Z"
     request_order = "orderby=createdDateTime"
     endpoint_signIns = "{0}?&${1}&${2}".format(config["endpoint_signIns"], request_filter, request_order)
 
