@@ -2,5 +2,6 @@
   "authority": "https://login.microsoftonline.com/b0e7335f-fd1f-46ad-98c7-55e6e4e222ea",
   "scope": [ "https://graph.microsoft.com/.default" ],
   "endpoint_ProfilePic": "https://graph.microsoft.com/v1.0/users",
-  "pic_size": "240x240"
+  "pic_size": "240x240",
+  "prefered_dc": ""
 }
