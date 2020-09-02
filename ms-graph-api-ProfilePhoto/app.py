@@ -59,7 +59,7 @@ async def get_graph_data(endpoint, token, session):
     async with session.get(
         endpoint,
         headers={'Authorization': 'Bearer ' + token['access_token']}, ) as graph_data:
-            print(graph_data)
+            #print(graph_data)
             if graph_data.status == 200:
                 return await graph_data.read()
             else:
@@ -110,8 +110,13 @@ async def get_token():
 async def set_user_pic(user, token, session):
     endpoint_ProfilePic = f"{config['endpoint_ProfilePic']}/{user['UserPrincipalName']}/photos/{config['pic_size']}/$value"
     graph_data = await get_graph_data(endpoint_ProfilePic, token, session)
+    #teste = bytearray(user['thumbnailPhoto'])
+    #teste2 = bytearray(graph_data)
 
-    if None != graph_data:
+    #if teste != teste2:
+    #    print("PORRA")
+
+    if (None != graph_data and None == user['thumbnailPhoto']) or (bytearray(user['thumbnailPhoto']) != bytearray(graph_data)):
         logging.info(f"Setting picture for user {user['UserPrincipalName']}.")
         try:
             cache_file_name = None
@@ -128,7 +133,8 @@ async def set_user_pic(user, token, session):
             
             #ps_args = f"Start-Process powershell.exe -ArgumentList \"Add-Content\", \"Xunda.txt\", \"-Value\", \"Xunda\""
             #ps_args = f"Add-Content Xunda.txt -Value '{user['UserPrincipalName']}'"
-            ps_args = f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server asl-ad04\n"
+            ps_args = f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server {config['prefered_dc']}\n"
+            #ps_args = f"$FileBytes = $null;[byte[]]$FileBytes = Get-Content \"{cache_file_name}\" -Encoding Byte;if( [String]($FileBytes) -ne [String]((Get-ADUser -Server {config['prefered_dc']} -Identity {user['SamAccountName']} -Properties thumbnailPhoto).thumbnailPhoto) ){{Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=$FileBytes}} -Server {config['prefered_dc']}}}\n"
             #await call_ps(ps_args)
             #await call_ps(f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server asl-ad04")
 
@@ -146,20 +152,21 @@ async def set_all_users_pics(ad_users, token):
     async with aiohttp.ClientSession() as session:
         tasks = []
         for user in ad_users:
-            print(user)
+            #print(user)
             task = asyncio.ensure_future(set_user_pic(user, token, session))
             tasks.append(task)
         await asyncio.gather(*tasks, return_exceptions=True)
 
-        logging.info("Starting PowerShell processing, this may take a while.")
-        await call_ps(f"Get-Content {ps_file_name} | ForEach-Object {{Invoke-Expression $_}}")
-        logging.info("Finished PowerShell processing.")
-        #ps_args = [r for r in results if r]
-        #ps_tasks = []
-        #for ps_arg in ps_args:
-        #    ps_task = asyncio.ensure_future(call_ps(ps_arg))
-        #    ps_tasks.append(ps_task)
-        #await asyncio.gather(*ps_tasks, return_exceptions=True)
+        if os.path.exists(ps_file_name):
+            logging.info("Starting PowerShell processing, this may take a while.")
+            await call_ps(f"Get-Content {ps_file_name} | ForEach-Object {{Invoke-Expression $_}}")
+            logging.info("Finished PowerShell processing.")
+            #ps_args = [r for r in results if r]
+            #ps_tasks = []
+            #for ps_arg in ps_args:
+            #    ps_task = asyncio.ensure_future(call_ps(ps_arg))
+            #    ps_tasks.append(ps_task)
+            #await asyncio.gather(*ps_tasks, return_exceptions=True)
 
 
 async def main():
@@ -176,8 +183,8 @@ async def main():
     token = await get_token()
 
     if "access_token" in token:      
-        #ad_users = json.loads(call_ps("Get-ADUser -Filter {UserPrincipalName -eq \"a.sky@uniasselvi.com.br\" -or UserPrincipalName -eq \"teste.rhad@uniasselvi.com.br\"} | Select-Object SamAccountName, UserPrincipalName | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
-        ad_users = json.loads(await call_ps("Get-ADUser -Filter * -SearchBase \"OU=Gente e Gestão,OU=Operacao EAD,OU=NEAD,OU=Unidades,DC=grupouniasselvi,DC=local\" | Select-Object SamAccountName, UserPrincipalName | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
+        #ad_users = json.loads(await call_ps(f"Get-ADUser -Server {config['prefered_dc']} -Filter {{UserPrincipalName -eq \"rosicler.teske@uniasselvi.com.br\" -or UserPrincipalName -eq \"teste.rhad@uniasselvi.com.br\"}} -Properties thumbnailPhoto | Select-Object SamAccountName, UserPrincipalName, thumbnailPhoto | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
+        ad_users = json.loads(await call_ps(f"Get-ADUser -Server {config['prefered_dc']} -Filter * -SearchBase \"OU=Gente e Gestão,OU=Operacao EAD,OU=NEAD,OU=Unidades,DC=grupouniasselvi,DC=local\" -Properties thumbnailPhoto | Select-Object SamAccountName, UserPrincipalName, thumbnailPhoto | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
         #ad_users = json.loads(await call_ps("Get-ADUser -Filter * -SearchBase \"OU=NEAD,OU=Unidades,DC=grupouniasselvi,DC=local\" | Select-Object SamAccountName, UserPrincipalName | Sort-Object UserPrincipalName | ConvertTo-Json -Compress"))
 
         await set_all_users_pics(ad_users, token)
