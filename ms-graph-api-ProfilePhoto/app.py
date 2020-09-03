@@ -110,6 +110,7 @@ async def get_token():
 async def set_user_pic(user, token, session):
     endpoint_ProfilePic = f"{config['endpoint_ProfilePic']}/{user['UserPrincipalName']}/photos/{config['pic_size']}/$value"
     graph_data = await get_graph_data(endpoint_ProfilePic, token, session)
+
     #teste = bytearray(user['thumbnailPhoto'])
     #teste2 = bytearray(graph_data)
 
@@ -136,7 +137,7 @@ async def set_user_pic(user, token, session):
             ps_args = f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server {config['prefered_dc']}\n"
             #ps_args = f"$FileBytes = $null;[byte[]]$FileBytes = Get-Content \"{cache_file_name}\" -Encoding Byte;if( [String]($FileBytes) -ne [String]((Get-ADUser -Server {config['prefered_dc']} -Identity {user['SamAccountName']} -Properties thumbnailPhoto).thumbnailPhoto) ){{Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=$FileBytes}} -Server {config['prefered_dc']}}}\n"
             #await call_ps(ps_args)
-            #await call_ps(f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server asl-ad04")
+            #await call_ps(f"Set-ADUser -Identity {user['SamAccountName']} -Replace @{{thumbnailPhoto=([byte[]](Get-Content \"{cache_file_name}\" -Encoding Byte))}} -Server {config['prefered_dc']}")
 
             with open(ps_file_name, "a") as ps_file:
                 ps_file.write(ps_args)     
