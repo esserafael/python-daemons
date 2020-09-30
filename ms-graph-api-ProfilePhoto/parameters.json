@@ -3,5 +3,6 @@
   "scope": [ "https://graph.microsoft.com/.default" ],
   "endpoint_ProfilePic": "https://graph.microsoft.com/v1.0/users",
   "pic_size": "240x240",
-  "prefered_dc": ""
+  "prefered_dc": "",
+  "base_search": ""
 }
