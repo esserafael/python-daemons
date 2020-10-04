@@ -149,3 +149,6 @@ output-files/
 *.crt
 *.csr
 *.pem
+
+# TempPoint files from Sapien PowerShell Studio
+*.TempPoint.ps1
