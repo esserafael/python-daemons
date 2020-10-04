@@ -1,2 +1,2 @@
 # python-daemons
-Just some test Python daemons (I'm still learning).
+Just some basic Python daemons (I'm still learning a lot).
