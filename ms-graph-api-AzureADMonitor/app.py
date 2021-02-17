@@ -68,6 +68,14 @@ async def get_graph_data(endpoint, token, session):
             else:
                 return None
 
+async def post_teams_webhook(webhook_json, endpoint, session):
+    async with session.post(
+        endpoint,
+        headers={'Content-type': 'application/json'},
+        json=webhook_json
+    ):
+        print("Xunda")
+
 async def get_token():
     client_id = os.getenv("daemon_client_id3")
     if not client_id:
@@ -146,20 +154,60 @@ async def get_alerts(token, session):
         if None != graph_data:
             for data in graph_data["value"]:
                 alert_title = f"\"Alert: {data['title']}.\""
-                alert_severity = data['severity']
 
                 alert_content = f"""
                 <tr><td style=`\"padding: 0 0 20px`\">{data['description']}</td></tr>
                 <tr><td style=`\"padding: 0 0 20px`\"><b>User:</b> {data['userStates'][0]['userPrincipalName']}</td></tr>
-                <tr><td style=`\"padding: 0 0 20px`\"><b>Alert ID:</b> {data['id']}</td></tr>
                 <tr><td style=`\"padding: 0 0 20px`\"><b>Severidade:</b> {data['severity']}</td></tr>
                 <tr><td style=`\"padding: 0 0 20px`\"><b>Categoria:</b> {data['category']}</td></tr>
+                <tr><td style=`\"padding: 0 0 20px`\"><b>Alert ID:</b> {data['id']}</td></tr>
                 <tr><td style=`\"padding: 0 0 20px`\"><b>Data:</b> {data['eventDateTime']}</td></tr>"""
                     
                 logging.info(alert_title)
 
+                webhook_json={
+                    'summary': 'Azure AD Alert',
+                    'title': 'Azure AD Alert',
+                    'sections': [{
+                        "activityTitle": data['title'],
+                        "activitySubtitle": data['description'],
+                        "facts": [{
+                            "name": "User",
+                            "value": data['userStates'][0]['userPrincipalName']
+                        }, {
+                            "name": "Severidade",
+                            "value": data['severity']
+                        }, {
+                            "name": "Categoria",
+                            "value": data['category']
+                        }, {
+                            "name": "Alert ID",
+                            "value": data['id']
+                        }, {
+                            "name": "Data",
+                            "value": data['eventDateTime']
+                        }],
+                        "markdown": True
+                    }],
+                    "potentialAction": [{
+                        "@type": "ActionCard",
+                        "name": "Abrir Alerta",
+                        "actions": [{
+                            "@type": "OpenUri",
+                            "name": "Abrir Alerta",
+                            "targets": [{
+                                "os": "default",
+                                "uri": data['sourceMaterials'][0]
+                            }]
+                        }]
+                    }]
+                }
+
+                await post_teams_webhook(webhook_json, "https://outlook.office.com/webhook/8a867be9-f970-4d0b-b9f4-0d63e36b62a4@b0e7335f-fd1f-46ad-98c7-55e6e4e222ea/IncomingWebhook/5dfeec98a84f46efa209970e1899b550/fe6be9e1-e6f4-4710-9b47-fd5d145cfae9", session)
+
                 ps_args = f"{ps_alert_script_path} -To {config['alerts_recipient']} -Title {alert_title} -Content \"{alert_content}\" -AlertSeverity \"{data['severity']}\""
                 await call_ps(ps_args)
+
 
     try:    
         alerts_graph_data = json.loads(await get_graph_data(config["endpoint_alerts"], token, session))
