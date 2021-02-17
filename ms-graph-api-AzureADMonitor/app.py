@@ -33,7 +33,7 @@ import time
 
     
 async def call_ps(ps_args):
-    logging.info(f"Calling PS command: {ps_args}")
+    logging.info(f"Calling PS.")
     try:
         p = subprocess.Popen([
             "powershell.exe", "-NoProfile", f"{ps_args}"],
@@ -138,13 +138,45 @@ async def get_org_data(token, session):
                 await call_ps(ps_args)
             
     except Exception as e:
-        logging.error(f"Exception while calling get_org_data: {str(e)}")  
+        logging.error(f"Exception while calling get_org_data: {str(e)}")
+
+
+async def get_alerts(token, session):
+    async def process_alerts(token, session, graph_data):               
+        if None != graph_data:
+            for data in graph_data["value"]:
+                alert_title = f"\"Alert: {data['title']}.\""
+                alert_severity = data['severity']
+
+                alert_content = f"""
+                <tr><td style=`\"padding: 0 0 20px`\">{data['description']}</td></tr>
+                <tr><td style=`\"padding: 0 0 20px`\"><b>User:</b> {data['userStates'][0]['userPrincipalName']}</td></tr>
+                <tr><td style=`\"padding: 0 0 20px`\"><b>Alert ID:</b> {data['id']}</td></tr>
+                <tr><td style=`\"padding: 0 0 20px`\"><b>Severidade:</b> {data['severity']}</td></tr>
+                <tr><td style=`\"padding: 0 0 20px`\"><b>Categoria:</b> {data['category']}</td></tr>
+                <tr><td style=`\"padding: 0 0 20px`\"><b>Data:</b> {data['eventDateTime']}</td></tr>"""
+                    
+                logging.info(alert_title)
+
+                ps_args = f"{ps_alert_script_path} -To {config['alerts_recipient']} -Title {alert_title} -Content \"{alert_content}\" -AlertSeverity \"{data['severity']}\""
+                await call_ps(ps_args)
+
+    try:    
+        alerts_graph_data = json.loads(await get_graph_data(config["endpoint_alerts"], token, session))
+        await process_alerts(token, session, alerts_graph_data)
+        while "@odata.nextLink" in alerts_graph_data:
+            alerts_graph_data = json.loads(await get_graph_data(alerts_graph_data["@odata.nextLink"], token, session)) 
+            await process_alerts(token, session, alerts_graph_data)
+        
+    except Exception as e:
+        logging.error(f"Exception while calling get_alerts: {str(e)}")    
 
 
 async def start_org_monitor(token):
     async with aiohttp.ClientSession() as session:
         tasks = []
-        task = asyncio.ensure_future(get_org_data(token, session))
+        #task = asyncio.ensure_future(get_org_data(token, session))
+        task = asyncio.ensure_future(get_alerts(token, session))
         tasks.append(task)
 
         await asyncio.gather(*tasks, return_exceptions=True)

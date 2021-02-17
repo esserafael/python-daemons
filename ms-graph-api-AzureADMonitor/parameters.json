@@ -2,6 +2,7 @@
   "authority": "https://login.microsoftonline.com/b0e7335f-fd1f-46ad-98c7-55e6e4e222ea",
   "scope": [ "https://graph.microsoft.com/.default" ],
   "endpoint_org": "https://graph.microsoft.com/v1.0/organization",
+  "endpoint_alerts": "https://graph.microsoft.com/v1.0/security/alerts?$filter=severity eq 'high' and severity eq 'medium' and category ne 'AnonymousLogin' and createdDateTime gt 2021-02-01T00:00:00.000Z and createdDateTime lt 2021-02-13T00:00:00.000Z&$top=1",
   "zabbix_server": "",
   "zabbix_azuread_host": "azuread",
   "alerts_recipient": "",

@@ -15,7 +15,9 @@ Param (
 	[Parameter(Mandatory = $true)]
 	[String]$Title,
 	[Parameter(Mandatory = $true)]
-	[String]$Content
+	[String]$Content,
+	[Parameter(Mandatory = $true)]
+	[String]$AlertSeverity
 )
 
 function Write-LocalLog
@@ -56,12 +58,20 @@ catch
 
 try
 {
+	switch ($AlertSeverity) 
+	{
+		"medium" { $AlertColor = "#ff9f00" }
+		"high" { $AlertColor = "#eb575a" }
+		Default { $AlertColor = "#ff9f00" }
+	}
+
 	$HtmlBody = Get-Content -Raw `
 							-Path "$($ScriptPath)\AlertTemplate_inline.html" `
 							-Encoding UTF8 `
 							-ErrorAction Stop
 	
 	$HtmlBody = $HtmlBody -replace "{PS_TITLE}", $Title
+	$HtmlBody = $HtmlBody -replace "{PS_ALERTCOLOR}", $AlertColor
 	$HtmlBody = $HtmlBody -replace "{PS_CONTENT}", $Content
 	$HtmlBody = $HtmlBody -replace "{PS_USERNAME}", "$(whoami.exe)"
 	$HtmlBody = $HtmlBody -replace "{PS_HOSTNAME}", "$(hostname.exe)"
