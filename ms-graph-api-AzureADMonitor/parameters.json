@@ -3,8 +3,9 @@
   "scope": [ "https://graph.microsoft.com/.default" ],
   "endpoint_org": "https://graph.microsoft.com/v1.0/organization",
   "endpoint_alerts": "https://graph.microsoft.com/v1.0/security/alerts?$filter=severity eq 'high' and severity eq 'medium' and category ne 'AnonymousLogin' and createdDateTime gt 2021-02-01T00:00:00.000Z and createdDateTime lt 2021-02-13T00:00:00.000Z&$top=1",
+  "endpoint_webhook": "",
   "zabbix_server": "",
   "zabbix_azuread_host": "azuread",
-  "alerts_recipient": "",
+  "alerts_recipient": "rafael.gustmann@uniasselvi.com.br",
   "azuread_usedquota_alert_percentage": 95
 }

@@ -203,7 +203,7 @@ async def get_alerts(token, session):
                     }]
                 }
 
-                await post_teams_webhook(webhook_json, "https://outlook.office.com/webhook/8a867be9-f970-4d0b-b9f4-0d63e36b62a4@b0e7335f-fd1f-46ad-98c7-55e6e4e222ea/IncomingWebhook/5dfeec98a84f46efa209970e1899b550/fe6be9e1-e6f4-4710-9b47-fd5d145cfae9", session)
+                await post_teams_webhook(webhook_json, config["endpoint_webhook"], session)
 
                 ps_args = f"{ps_alert_script_path} -To {config['alerts_recipient']} -Title {alert_title} -Content \"{alert_content}\" -AlertSeverity \"{data['severity']}\""
                 await call_ps(ps_args)
