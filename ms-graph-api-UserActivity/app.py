@@ -151,10 +151,7 @@ if "access_token" in result:
         if "error" in graph_data:            
             logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
         else:        
-            if "@odata.nextLink" in graph_data:
-                logging.info("Processing the current response page, up to row {0}.".format(
-                        (re.search("^.+_(\d+)$", graph_data["@odata.nextLink"]).group(1))))
-            else:
+            if not "@odata.nextLink" in graph_data:
                 logging.info("Processing the last response page.")
 
         return graph_data
@@ -217,14 +214,18 @@ if "access_token" in result:
 
     logging.info("Sending request do endpoint.")
 
-    graph_data = get_graph_data(endpoint_signIns)
-    save_to_html(graph_data)
-    save_to_csv(graph_data)
-
-    while "@odata.nextLink" in graph_data:        
-        graph_data = get_graph_data(graph_data["@odata.nextLink"])
+    try:
+        graph_data = get_graph_data(endpoint_signIns)
         save_to_html(graph_data)
         save_to_csv(graph_data)
+
+        while "@odata.nextLink" in graph_data:        
+            graph_data = get_graph_data(graph_data["@odata.nextLink"])
+            save_to_html(graph_data)
+            save_to_csv(graph_data)
+    
+    except Exception as e:
+        logging.error(f"Exception while getting graph data: {str(e)}")
 
     # Close html file.
     with (open(html_file_path, "a", newline='', encoding='utf-8')) as html_file:
@@ -252,7 +253,8 @@ if "access_token" in result:
 
         
 else:
-    logging.error("{0}: {1} (correlation_id: {3})".format(result.get("error"), result.get("error_description"), result.get("correlation_id")))
+    #logging.error("{0}: {1} (correlation_id: {3})".format(result.get("error"), result.get("error_description"), result.get("correlation_id")))
+    logging.error(f"{result.get('error')}: {result.get('error_description')} (correlation_id: {result.get('correlation_id')})")
     print(result.get("error"))
     print(result.get("error_description"))
     print(result.get("correlation_id"))  # You may need this when reporting a bug
