@@ -198,7 +198,7 @@ if "access_token" in result:
         try:
             with open(html_file_path, "a", newline='', encoding='utf-8') as html_file:
                 for graph_data in graph_data["value"]:
-                    if(graph_data):
+                    if graph_data:
                         converted_dt = parser.parse(graph_data["createdDateTime"])
 
                         html_file.write(
