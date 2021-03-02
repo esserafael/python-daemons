@@ -49,44 +49,53 @@ logging.basicConfig(
     ]
 )
 
-client_id = os.getenv("daemon_client_id")
-if not client_id:
-    errmsg = "Define daemon_client_id environment variable"
-    logging.error(errmsg)
-    raise ValueError(errmsg)    
-else:
-    logging.info("client_id found -> '{0}'.".format(client_id))
-
-client_secret = os.getenv("daemon_client_secret")
-if not client_secret:
-    errmsg = "Define daemon_client_secret environment variable"
-    logging.error(errmsg)
-    raise ValueError(errmsg)
-else:
-    logging.info("client_secret found.")
-
 config = json.load(open(sys.argv[1]))
 
-# Create a preferably long-lived app instance which maintains a token cache.
-app = msal.ConfidentialClientApplication(
-    client_id, authority=config["authority"],
-    client_credential=client_secret,
-    # token_cache=...  # Default cache is in memory only.
-                       # You can learn how to use SerializableTokenCache from
-                       # https://msal-python.rtfd.io/en/latest/#msal.SerializableTokenCache
-    )
+def get_token():
 
-# The pattern to acquire a token looks like this.
-result = None
+    client_id = os.getenv("daemon_client_id")
+    if not client_id:
+        errmsg = "Define daemon_client_id environment variable"
+        logging.error(errmsg)
+        raise ValueError(errmsg)    
+    else:
+        logging.info("client_id found -> '{0}'.".format(client_id))
 
-# Firstly, looks up a token from cache
-# Since we are looking for token for the current app, NOT for an end user,
-# notice we give account parameter as None.
-result = app.acquire_token_silent(config["scope"], account=None)
+    client_secret = os.getenv("daemon_client_secret")
+    if not client_secret:
+        errmsg = "Define daemon_client_secret environment variable"
+        logging.error(errmsg)
+        raise ValueError(errmsg)
+    else:
+        logging.info("client_secret found.")
 
-if not result:
-    logging.info("No token exists in cache. Getting a new one from AzureAD.")
-    result = app.acquire_token_for_client(scopes=config["scope"])
+    # Create a preferably long-lived app instance which maintains a token cache.
+    app = msal.ConfidentialClientApplication(
+        client_id, authority=config["authority"],
+        client_credential=client_secret,
+        # token_cache=...  # Default cache is in memory only.
+                        # You can learn how to use SerializableTokenCache from
+                        # https://msal-python.rtfd.io/en/latest/#msal.SerializableTokenCache
+        )
+
+    # The pattern to acquire a token looks like this.
+    result = None
+
+    # Firstly, looks up a token from cache
+    # Since we are looking for token for the current app, NOT for an end user,
+    # notice we give account parameter as None.
+    result = app.acquire_token_silent(config["scope"], account=None)
+
+    if not result:
+        logging.info("No token exists in cache. Getting a new one from AzureAD.")
+        result = app.acquire_token_for_client(scopes=config["scope"])
+
+    result["renew_datetime"]  = datetime.datetime.now() + datetime.timedelta(seconds=result["expires_in"])
+
+    return result
+
+
+result = get_token()
 
 if "access_token" in result:
 
@@ -127,7 +136,7 @@ if "access_token" in result:
 
     logging.info("Creating column headers in HTML file '{0}'.".format(html_file_path))
 
-    with (open(html_file_path, "a", newline='', encoding='utf-8')) as html_file:
+    with open(html_file_path, "a", newline='', encoding='utf-8') as html_file:
         html_file.write("<tr class=header>")    
         for header_name in header_columns:
             html_file.write(f"<td>{header_name}</td>")
@@ -139,7 +148,7 @@ if "access_token" in result:
 
     logging.info("Creating header row in CSV file '{0}'.".format(csv_file_path))
 
-    with (open(csv_file_path, "w", newline='', encoding='utf-8')) as csv_file:
+    with open(csv_file_path, "w", newline='', encoding='utf-8') as csv_file:
         csv_writer = csv.writer(csv_file)
         csv_writer.writerow(header_columns)
 
@@ -162,22 +171,23 @@ if "access_token" in result:
             json.dump(graph_data, f_json, ensure_ascii=False, indent=4)
 
         try:
-            with (open(csv_file_path, "a", newline='', encoding='utf-8')) as csv_file:
+            with open(csv_file_path, "a", newline='', encoding='utf-8') as csv_file:
                 csv_writer = csv.writer(csv_file)
                 for graph_data in graph_data["value"]:
-                    csv_writer.writerow((
-                        graph_data["userDisplayName"],
-                        graph_data["userPrincipalName"],
-                        graph_data["createdDateTime"],
-                        graph_data["appDisplayName"],
-                        graph_data["clientAppUsed"],
-                        graph_data["deviceDetail"]["browser"],
-                        graph_data["deviceDetail"]["operatingSystem"],
-                        graph_data["ipAddress"],
-                        graph_data["location"]["city"],
-                        graph_data["location"]["state"],
-                        graph_data["location"]["countryOrRegion"]
-                    ))
+                    if graph_data:
+                        csv_writer.writerow((
+                            graph_data["userDisplayName"],
+                            graph_data["userPrincipalName"],
+                            graph_data["createdDateTime"],
+                            graph_data["appDisplayName"],
+                            graph_data["clientAppUsed"],
+                            graph_data["deviceDetail"]["browser"],
+                            graph_data["deviceDetail"]["operatingSystem"],
+                            graph_data["ipAddress"],
+                            graph_data["location"]["city"],
+                            graph_data["location"]["state"],
+                            graph_data["location"]["countryOrRegion"]
+                        ))
 
             logging.info("CSV file appended.")
         except Exception as e:
@@ -186,12 +196,13 @@ if "access_token" in result:
 
     def save_to_html(graph_data):
         try:
-            with (open(html_file_path, "a", newline='', encoding='utf-8')) as html_file:
+            with open(html_file_path, "a", newline='', encoding='utf-8') as html_file:
                 for graph_data in graph_data["value"]:
-                    converted_dt = parser.parse(graph_data["createdDateTime"])
+                    if(graph_data):
+                        converted_dt = parser.parse(graph_data["createdDateTime"])
 
-                    html_file.write(
-                        f"""
+                        html_file.write(
+                            f"""
 <tr>
 <td>{graph_data['userDisplayName']}</td> 
 <td>{graph_data['userPrincipalName']}</td> 
@@ -219,7 +230,14 @@ if "access_token" in result:
         save_to_html(graph_data)
         save_to_csv(graph_data)
 
-        while "@odata.nextLink" in graph_data:        
+        while "@odata.nextLink" in graph_data:
+
+            if result["renew_datetime"] <= (datetime.datetime.now() + datetime.timedelta(minutes=5)):
+                result = get_token()
+                if not"access_token" in result:
+                    logging.error(f"{result.get('error')}: {result.get('error_description')} (correlation_ID: {result.get('correlation_id')})")                
+
+
             graph_data = get_graph_data(graph_data["@odata.nextLink"])
             save_to_html(graph_data)
             save_to_csv(graph_data)
@@ -228,7 +246,7 @@ if "access_token" in result:
         logging.error(f"Exception while getting graph data: {str(e)}")
 
     # Close html file.
-    with (open(html_file_path, "a", newline='', encoding='utf-8')) as html_file:
+    with open(html_file_path, "a", newline='', encoding='utf-8') as html_file:
         html_file.write("</table></body></html>")
 
     logging.info("Finished getting result pages, everything exported to CSV file '{0}'.".format(csv_file_path))
