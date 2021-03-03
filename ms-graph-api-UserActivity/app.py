@@ -30,6 +30,7 @@ import logging
 import datetime
 import re
 import pathlib
+import time
 from shutil import copyfile
 from dateutil import parser, tz
 
@@ -159,9 +160,11 @@ if "access_token" in result:
 
         if "error" in graph_data:            
             logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
-        else:        
-            if not "@odata.nextLink" in graph_data:
-                logging.info("Processing the last response page.")
+        elif not "@odata.nextLink" in graph_data:
+            logging.info("Processing the last response page.")
+        elif "Retry-After" in graph_data.headers:
+            time.sleep(graph_data.headers["Retry-After"])
+            graph_data = get_graph_data(endpoint)
 
         return graph_data
     
@@ -173,8 +176,8 @@ if "access_token" in result:
         try:
             with open(csv_file_path, "a", newline='', encoding='utf-8') as csv_file:
                 csv_writer = csv.writer(csv_file)
-                for graph_data in graph_data["value"]:
-                    if graph_data:
+                if graph_data and "value" in graph_data:
+                    for graph_data in graph_data["value"]:
                         csv_writer.writerow((
                             graph_data["userDisplayName"],
                             graph_data["userPrincipalName"],
@@ -188,6 +191,8 @@ if "access_token" in result:
                             graph_data["location"]["state"],
                             graph_data["location"]["countryOrRegion"]
                         ))
+                else:
+                    logging.error("CSV: Graph data doesn't contain data or 'value' property.")
 
             logging.info("CSV file appended.")
         except Exception as e:
@@ -197,8 +202,8 @@ if "access_token" in result:
     def save_to_html(graph_data):
         try:
             with open(html_file_path, "a", newline='', encoding='utf-8') as html_file:
-                for graph_data in graph_data["value"]:
-                    if graph_data:
+                if graph_data and "value" in graph_data:
+                    for graph_data in graph_data["value"]:
                         converted_dt = parser.parse(graph_data["createdDateTime"])
 
                         html_file.write(
@@ -217,6 +222,8 @@ if "access_token" in result:
 <td>{graph_data['location']['countryOrRegion']}</td> 
 </tr>
 """)
+                else:
+                    logging.error("HTML: Graph data doesn't contain data or 'value' property.")
 
             logging.info("HTML file appended.")                    
         except Exception as e:
