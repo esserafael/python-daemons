@@ -33,6 +33,7 @@ import pathlib
 import time
 from shutil import copyfile
 from dateutil import parser, tz
+import uuid 
 
 import requests
 import msal
@@ -154,19 +155,27 @@ if "access_token" in result:
         csv_writer.writerow(header_columns)
 
     def get_graph_data(endpoint):
-        graph_data = requests.get(  # Use token to call downstream service
-        endpoint,
-        headers={'Authorization': 'Bearer ' + result['access_token']}, ).json()
+        try:
+            graph_data = requests.get(  # Use token to call downstream service
+            endpoint,
+            headers={'Authorization': 'Bearer ' + result['access_token']}, )
 
-        if "error" in graph_data:            
-            logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
-        elif not "@odata.nextLink" in graph_data:
-            logging.info("Processing the last response page.")
-        elif "Retry-After" in graph_data.headers:
-            time.sleep(graph_data.headers["Retry-After"])
-            graph_data = get_graph_data(endpoint)
+            if "Retry-After" in graph_data.headers:
+                logging.warning(f"Request response has Retry-After header, probably we're being throttled, waiting {graph_data.headers['Retry-After']} second(s).")
+                time.sleep(graph_data.headers["Retry-After"])
+                graph_data = get_graph_data(endpoint)
+            
+            graph_data = graph_data.json()
 
-        return graph_data
+            if "error" in graph_data:            
+                logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
+            elif not "@odata.nextLink" in graph_data:
+                logging.info("Processing the last response page.")        
+
+            return graph_data
+        except Exception as e:
+            logging.error(f"Exception while requesting graph api: {str(e)}")   
+
     
     def save_to_csv(graph_data):
         #print(json.dumps(graph_data, indent=2))
@@ -234,8 +243,9 @@ if "access_token" in result:
 
     try:
         graph_data = get_graph_data(endpoint_signIns)
-        save_to_html(graph_data)
-        save_to_csv(graph_data)
+        if graph_data:
+            save_to_html(graph_data)
+            save_to_csv(graph_data)
 
         while "@odata.nextLink" in graph_data:
 
@@ -246,8 +256,9 @@ if "access_token" in result:
 
 
             graph_data = get_graph_data(graph_data["@odata.nextLink"])
-            save_to_html(graph_data)
-            save_to_csv(graph_data)
+            if graph_data:
+                save_to_html(graph_data)
+                save_to_csv(graph_data)
     
     except Exception as e:
         logging.error(f"Exception while getting graph data: {str(e)}")
@@ -261,7 +272,7 @@ if "access_token" in result:
     # Send to PowerShell to convert to Excel and send by e-mail.
     ps_script_path = os.path.join(current_wdpath, "ConvertTo-ExcelCustomReportHTML.ps1")
     #ps_html_path = os.path.join(current_wdpath, "teste.html")
-    ps_xlsx_path = os.path.join(current_wdpath, output_files_fname, f"AuditoriaEntrada_{yesterday.strftime('%d-%m-%Y')}_Completo.xlsx")
+    ps_xlsx_path = os.path.join(current_wdpath, output_files_fname, f"AuditoriaEntrada_{yesterday.strftime('%d-%m-%Y')}_Completo_{str(uuid.uuid4())}.xlsx")
 
     ps_arg = f"{ps_script_path} -HtmlPath {html_file_path} -XlsxPath {ps_xlsx_path}"
 
