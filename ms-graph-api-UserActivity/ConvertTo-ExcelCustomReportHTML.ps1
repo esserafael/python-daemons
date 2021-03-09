@@ -85,7 +85,8 @@ catch
 
 if ($XlsxFileCreated)
 {
-	$To = @("rafael.gustmann@uniasselvi.com.br", "marcos.klug@uniasselvi.com.br")
+	#$To = @("paula.rodrigues@uniasselvi.com.br", "pedro.graca@uniasselvi.com.br", "cloves.machado@uniasselvi.com.br")
+	$To = @("rafael.gustmann@uniasselvi.com.br")
 	$DateString = Split-Path $XlsxPath -Leaf | Select-String -Pattern "^.+_(\d+-\d+-\d+)_"
 	
 	try
@@ -93,6 +94,7 @@ if ($XlsxFileCreated)
 		Send-MailMessage `
 						 -From $MarvinCred.UserName `
 						 -To $To `
+						 -Cc "rafael.gustmann@uniasselvi.com.br" `
 						 -Subject "Relatório diário de acessos ao Office 365." `
 						 -Body "<p style='font-family: 'Segoe UI';'>Bom dia!<br /><br />Em anexo está o arquivo com o relatório diário de acessos ao Office 365, do dia $($DateString.Matches.Groups[1].Value).</p>" `
 						 -BodyAsHtml `
@@ -109,5 +111,29 @@ if ($XlsxFileCreated)
 	catch
 	{
 		Write-LocalLog -Text "Error sending mail: $($_.Exception.Message)"
+	}
+
+	try
+	{
+		$Compress = @{
+			Path = $XlsxPath, $HtmlPath, ($HtmlPath -replace ".html", ".csv")
+			CompressionLevel = "Optimal"
+			DestinationPath = ($XlsxPath -replace ".xlsx", ".zip")
+		}
+	
+		Compress-Archive @Compress -ErrorAction Stop
+		
+		try
+		{
+			Remove-Item -Path @($XlsxPath, $HtmlPath, ($HtmlPath -replace ".html", ".csv")) -ErrorAction Stop
+		}
+			catch
+		{
+			Write-LocalLog -Text "Error removing files after compression: $($_.Exception.Message)"
+		}		
+	}
+	catch
+	{
+		Write-LocalLog -Text "Error compressing files: $($_.Exception.Message)"
 	}
 }

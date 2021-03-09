@@ -96,6 +96,16 @@ def get_token():
 
     return result
 
+def renew_token():
+    logging.info("Getting new token from AzureAD.")
+    result = get_token()
+    while not "access_token" in result:
+        logging.error(f"Error getting new token: {result.get('error')}: {result.get('error_description')} (correlation_ID: {result.get('correlation_id')})")                
+        time.sleep(30)
+        result = get_token()
+    
+    return result
+    
 
 result = get_token()
 
@@ -155,6 +165,7 @@ if "access_token" in result:
         csv_writer.writerow(header_columns)
 
     def get_graph_data(endpoint):
+        graph_data_error = False
         try:
             graph_data = requests.get(  # Use token to call downstream service
             endpoint,
@@ -162,19 +173,18 @@ if "access_token" in result:
 
             if "Retry-After" in graph_data.headers:
                 logging.warning(f"Request response has Retry-After header, probably we're being throttled, waiting {graph_data.headers['Retry-After']} second(s).")
-                time.sleep(graph_data.headers["Retry-After"])
+                time.sleep(int(graph_data.headers["Retry-After"]))
                 graph_data = get_graph_data(endpoint)
             
             graph_data = graph_data.json()
 
-            if "error" in graph_data:            
-                logging.error("{0}: {1}".format(graph_data["error"]["code"], graph_data["error"]["message"]))
-            elif not "@odata.nextLink" in graph_data:
-                logging.info("Processing the last response page.")        
+            if not "@odata.nextLink" in graph_data:
+                logging.info("Processing the last response page.")
 
-            return graph_data
         except Exception as e:
-            logging.error(f"Exception while requesting graph api: {str(e)}")   
+            logging.error(f"Exception while in get_graph_data function: {str(e)}") 
+         
+        return graph_data
 
     
     def save_to_csv(graph_data):
@@ -239,26 +249,38 @@ if "access_token" in result:
             logging.error(f"Exception while generating HTML file: {str(e)}")
         return
 
+
     logging.info("Sending request do endpoint.")
 
     try:
         graph_data = get_graph_data(endpoint_signIns)
-        if graph_data:
-            save_to_html(graph_data)
-            save_to_csv(graph_data)
+        if "error" in graph_data or None == graph_data:  
+            logging.error(f"graph data with error or empty. {graph_data['error']['code']} {graph_data['error']['message']}")          
+            if graph_data['error']['code'] == "InvalidAuthenticationToken":
+                result = renew_token()
+
+            graph_data = get_graph_data(endpoint_signIns)
+
+        save_to_html(graph_data)
+        save_to_csv(graph_data)
 
         while "@odata.nextLink" in graph_data:
+            next_link = graph_data["@odata.nextLink"]
 
             if result["renew_datetime"] <= (datetime.datetime.now() + datetime.timedelta(minutes=5)):
-                result = get_token()
-                if not"access_token" in result:
-                    logging.error(f"{result.get('error')}: {result.get('error_description')} (correlation_ID: {result.get('correlation_id')})")                
+                result = renew_token()                
 
+            graph_data = get_graph_data(next_link)
+            while "error" in graph_data or None == graph_data:  
+                logging.error(f"graph data with error or empty. {graph_data['error']['code']} {graph_data['error']['message']}")          
+                if graph_data['error']['code'] == "InvalidAuthenticationToken":
+                    result = renew_token()
 
-            graph_data = get_graph_data(graph_data["@odata.nextLink"])
-            if graph_data:
-                save_to_html(graph_data)
-                save_to_csv(graph_data)
+                graph_data = get_graph_data(next_link)
+            
+            save_to_html(graph_data)
+            save_to_csv(graph_data)
+                
     
     except Exception as e:
         logging.error(f"Exception while getting graph data: {str(e)}")
