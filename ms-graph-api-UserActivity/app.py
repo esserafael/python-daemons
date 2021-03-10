@@ -53,6 +53,8 @@ logging.basicConfig(
 
 config = json.load(open(sys.argv[1]))
 
+s = time.perf_counter()
+
 def get_token():
 
     client_id = os.getenv("daemon_client_id")
@@ -119,7 +121,7 @@ if "access_token" in result:
     request_order = "orderby=createdDateTime"
     endpoint_signIns = "{0}?&${1}&${2}".format(config["endpoint_signIns"], request_filter, request_order)
 
-    logging.debug("Endpoint set as: '{0}'".format(endpoint_signIns))
+    logging.info(f"Endpoint set as: '{endpoint_signIns}'")
 
     output_files_fname = "output-files"
 
@@ -165,7 +167,6 @@ if "access_token" in result:
         csv_writer.writerow(header_columns)
 
     def get_graph_data(endpoint):
-        graph_data_error = False
         try:
             graph_data = requests.get(  # Use token to call downstream service
             endpoint,
@@ -189,8 +190,8 @@ if "access_token" in result:
     
     def save_to_csv(graph_data):
         #print(json.dumps(graph_data, indent=2))
-        with open('graph_data.json', 'w', encoding='utf-8') as f_json:
-            json.dump(graph_data, f_json, ensure_ascii=False, indent=4)
+        #with open('graph_data.json', 'w', encoding='utf-8') as f_json:
+        #    json.dump(graph_data, f_json, ensure_ascii=False, indent=4)
 
         try:
             with open(csv_file_path, "a", newline='', encoding='utf-8') as csv_file:
@@ -289,7 +290,7 @@ if "access_token" in result:
     with open(html_file_path, "a", newline='', encoding='utf-8') as html_file:
         html_file.write("</table></body></html>")
 
-    logging.info("Finished getting result pages, everything exported to CSV file '{0}'.".format(csv_file_path))
+    logging.info(f"Finished getting result pages, everything exported to CSV and HTML files '{csv_file_path}'.")
 
     # Send to PowerShell to convert to Excel and send by e-mail.
     ps_script_path = os.path.join(current_wdpath, "ConvertTo-ExcelCustomReportHTML.ps1")
@@ -313,7 +314,6 @@ if "access_token" in result:
 else:
     #logging.error("{0}: {1} (correlation_id: {3})".format(result.get("error"), result.get("error_description"), result.get("correlation_id")))
     logging.error(f"{result.get('error')}: {result.get('error_description')} (correlation_id: {result.get('correlation_id')})")
-    print(result.get("error"))
-    print(result.get("error_description"))
-    print(result.get("correlation_id"))  # You may need this when reporting a bug
 
+elapsed = time.perf_counter() - s
+logging.info(f"Script finished, executed in {elapsed:0.2f} seconds.")
