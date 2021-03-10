@@ -123,7 +123,6 @@ async def save_to_html(row):
                    
     except Exception as e:
         logging.error(f"Exception while generating HTML file: {str(e)}")
-    return
 
 
 async def save_to_csv(row):
@@ -148,8 +147,7 @@ async def save_to_csv(row):
                 logging.error("CSV: Row doesn't contain data.")
 
     except Exception as e:
-        logging.error(f"Exception while generating CSV file: {str(e)}")            
-    return
+        logging.error(f"Exception while generating CSV file: {str(e)}")
 
 
 async def get_graph_data(endpoint, token, session):
@@ -166,7 +164,7 @@ async def get_graph_data(endpoint, token, session):
             if "Retry-After" in response.headers:
                 logging.warning(f"Request response has Retry-After header, probably we're being throttled, waiting {response.headers['Retry-After']} second(s).")
                 time.sleep(int(response.headers["Retry-After"]))
-            return get_graph_data(endpoint, token, session)
+            return await get_graph_data(endpoint, token, session)
 
 
 async def get_data(endpoint, token, session):
@@ -194,8 +192,14 @@ async def get_data(endpoint, token, session):
                 tasks.append(asyncio.ensure_future(save_to_html(row)))
                 tasks.append(asyncio.ensure_future(save_to_csv(row)))
 
-        logging.info(f"Gathering tasks")
-        await asyncio.gather(*tasks, return_exceptions=True)
+            #if len(tasks) == 50:
+                #logging.info(f"Gathering page tasks")
+                await asyncio.gather(*tasks, return_exceptions=True)
+                tasks = []
+
+            
+        #logging.info(f"Gathering page last tasks")
+        #await asyncio.gather(*tasks, return_exceptions=True)
 
         logging.info("HTML and CSV file appended.")
 
@@ -222,8 +226,14 @@ async def get_data(endpoint, token, session):
                     tasks.append(asyncio.ensure_future(save_to_html(row)))
                     tasks.append(asyncio.ensure_future(save_to_csv(row)))
                 
-            logging.info(f"Gathering tasks")
-            await asyncio.gather(*tasks, return_exceptions=True)
+                #if len(tasks) == 50:
+                    #logging.info(f"Gathering page tasks")
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                    tasks = []
+                
+            
+            #logging.info(f"Gathering page last tasks")
+            #await asyncio.gather(*tasks, return_exceptions=True)
 
             logging.info("HTML and CSV file appended.")
 
@@ -268,7 +278,10 @@ async def start_report_gathering(token):
 
     async with aiohttp.ClientSession() as session:
         #await get_data(token, session)
-        result = await get_data(config["endpoint_signIns"], token, session)
+        #tasks = []
+        #tasks.append(asyncio.ensure_future(get_data(config["endpoint_signIns"], token, session)))
+        #result = await asyncio.gather(*tasks, return_exceptions=True)
+        result = await get_data(config["endpoint_signIns"], token, session)        
 
         if result:
             # Close html file.
