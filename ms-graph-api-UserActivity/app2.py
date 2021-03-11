@@ -122,7 +122,8 @@ async def save_to_html(row):
                 logging.error("HTML: Row doesn't contain data.")
                    
     except Exception as e:
-        logging.error(f"Exception while generating HTML file: {str(e)}")
+        logging.error(f"Exception while generating HTML file: {e}, trying again.")
+        await save_to_html(row)
 
 
 async def save_to_csv(row):
@@ -147,7 +148,8 @@ async def save_to_csv(row):
                 logging.error("CSV: Row doesn't contain data.")
 
     except Exception as e:
-        logging.error(f"Exception while generating CSV file: {str(e)}")
+        logging.error(f"Exception while generating CSV file: {e}, trying again.")
+        await save_to_csv(row)
 
 
 async def get_graph_data(endpoint, token, session):
@@ -178,23 +180,35 @@ async def get_data(endpoint, token, session):
         page_counter = 1
 
         logging.info(f"Getting page {page_counter}")
+        try:
+            graph_data = await get_graph_data(endpoint_signIns, token, session)
+        except Exception as e:
+            logging.error(f"Error getting graph data: {e}")
+            graph_data = None
 
-        graph_data = await get_graph_data(endpoint_signIns, token, session)
         while "error" in graph_data or None == graph_data:  
             logging.error(f"graph data with error or empty. {graph_data['error']['code']} {graph_data['error']['message']}")          
             if graph_data['error']['code'] == "InvalidAuthenticationToken":
                 token = await renew_token()
-            graph_data = await get_graph_data(endpoint_signIns, token, session)
+            try:
+                graph_data = await get_graph_data(endpoint_signIns, token, session)
+            except Exception as e:
+                logging.error(f"Error getting graph data: {e}")
+                graph_data = None
 
         tasks = []
         for row in graph_data["value"]:
             if row:
-                tasks.append(asyncio.ensure_future(save_to_html(row)))
-                tasks.append(asyncio.ensure_future(save_to_csv(row)))
+                try:
+                    tasks.append(asyncio.ensure_future(save_to_html(row)))
+                    tasks.append(asyncio.ensure_future(save_to_csv(row)))
 
-            #if len(tasks) == 50:
-                #logging.info(f"Gathering page tasks")
-                await asyncio.gather(*tasks, return_exceptions=True)
+                #if len(tasks) == 50:
+                    #logging.info(f"Gathering page tasks")
+                    await asyncio.gather(*tasks, return_exceptions=True)
+                except Exception as e:
+                    logging.error(f"Error writing row data to files: {e}")
+
                 tasks = []
 
             
@@ -211,24 +225,36 @@ async def get_data(endpoint, token, session):
             if token["renew_datetime"] <= (datetime.datetime.now() + datetime.timedelta(minutes=5)):
                 token = await renew_token() 
 
-            logging.info(f"Getting page {page_counter}")               
+            logging.info(f"Getting page {page_counter}")              
+            try:
+                graph_data = await get_graph_data(next_link, token, session)
+            except Exception as e:
+                logging.error(f"Error getting graph data: {e}")
+                graph_data = None
 
-            graph_data = await get_graph_data(next_link, token, session)
             while "error" in graph_data or None == graph_data:  
                 logging.error(f"graph data with error or empty. {graph_data['error']['code']} {graph_data['error']['message']}")          
                 if graph_data['error']['code'] == "InvalidAuthenticationToken":
                     token = await renew_token()
-                graph_data = await get_graph_data(next_link, token, session)
+                try:
+                    graph_data = await get_graph_data(next_link, token, session)
+                except Exception as e:
+                    logging.error(f"Error getting graph data: {e}")
+                    graph_data = None
             
             tasks = []
             for row in graph_data["value"]:
                 if row:
-                    tasks.append(asyncio.ensure_future(save_to_html(row)))
-                    tasks.append(asyncio.ensure_future(save_to_csv(row)))
-                
-                #if len(tasks) == 50:
-                    #logging.info(f"Gathering page tasks")
-                    await asyncio.gather(*tasks, return_exceptions=True)
+                    try:
+                        tasks.append(asyncio.ensure_future(save_to_html(row)))
+                        tasks.append(asyncio.ensure_future(save_to_csv(row)))
+                    
+                    #if len(tasks) == 50:
+                        #logging.info(f"Gathering page tasks")
+                        await asyncio.gather(*tasks, return_exceptions=True)
+                    except Exception as e:
+                        logging.error(f"Error writing row data to files: {e}")
+
                     tasks = []
                 
             
@@ -242,10 +268,21 @@ async def get_data(endpoint, token, session):
         return True
         
     except Exception as e:
-        logging.error(f"Exception while generating CSV file: {str(e)}")
+        logging.error(f"Exception getting report data: {e}")
         return False     
 
-async def start_report_gathering(token):    
+async def start_report_gathering(token):  
+
+    print(f"{yesterday.strftime('%Y-%m-%d')}T03:00:00Z")
+
+    start_datetime = yesterday.replace(hour=3, minute=0, second=0)
+    start_datetime2 = start_datetime + datetime.timedelta(hours=2)
+    end_datetime = start_datetime2 - datetime.timedelta(seconds=1)
+
+    print(f"{start_datetime.strftime('%Y-%m-%dT%H:%M:%SZ')}")
+    print(f"{end_datetime.strftime('%Y-%m-%dT%H:%M:%S.999999Z')}")
+    print(f"{start_datetime2.strftime('%Y-%m-%dT%H:%M:%SZ')}")
+
 
     header_columns = [
         "Nome",
