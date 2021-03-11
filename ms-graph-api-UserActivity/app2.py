@@ -96,9 +96,10 @@ async def call_ps(ps_args):
         return None
 
 
-async def save_to_html(row):
+async def save_to_html(row, worker):
     try:
-        with open(html_file_path, "a", newline='', encoding='utf-8') as html_file:
+        logging_worker = f" [Worker{worker}] "
+        with open(html_file_path.replace(".html", f"_worker{worker}.html"), "a", newline='', encoding='utf-8') as html_file:
             if row:
                 here_tz = tz.tzlocal()
                 converted_dt = parser.parse(row["createdDateTime"])
@@ -119,16 +120,17 @@ async def save_to_html(row):
 </tr>
 """)
             else:
-                logging.error("HTML: Row doesn't contain data.")
+                logging.error(f"{logging_worker}HTML: Row doesn't contain data.")
                    
     except Exception as e:
-        logging.error(f"Exception while generating HTML file: {e}, trying again.")
+        logging.error(f"{logging_worker}Exception while generating HTML file: {e}, trying again.")
         await save_to_html(row)
 
 
-async def save_to_csv(row):
+async def save_to_csv(row, worker):
     try:
-        with open(csv_file_path, "a", newline='', encoding='utf-8') as csv_file:
+        logging_worker = f" [Worker{worker}] "
+        with open(csv_file_path.replace(".csv", f"_worker{worker}.csv"), "a", newline='', encoding='utf-8') as csv_file:
             csv_writer = csv.writer(csv_file)
             if row:
                 csv_writer.writerow((
@@ -145,10 +147,10 @@ async def save_to_csv(row):
                     row["location"]["countryOrRegion"]
                 ))
             else:
-                logging.error("CSV: Row doesn't contain data.")
+                logging.error(f"{logging_worker}CSV: Row doesn't contain data.")
 
     except Exception as e:
-        logging.error(f"Exception while generating CSV file: {e}, trying again.")
+        logging.error(f"{logging_worker}Exception while generating CSV file: {e}, trying again.")
         await save_to_csv(row)
 
 
@@ -162,52 +164,53 @@ async def get_graph_data(endpoint, token, session):
         if response.status == 200:
             return json.loads(await response.read())
         else:
-            logging.error(f"Error getting sigins {response.status} {response.reason}")
+            logging.error(f"Error getting signins {response.status} {response.reason} - The request endpoint was: '{endpoint}'")
             if "Retry-After" in response.headers:
                 logging.warning(f"Request response has Retry-After header, probably we're being throttled, waiting {response.headers['Retry-After']} second(s).")
                 time.sleep(int(response.headers["Retry-After"]))
             return await get_graph_data(endpoint, token, session)
 
 
-async def get_data(endpoint, token, session):
-    try:
-        request_filter = f"filter=createdDateTime ge {yesterday.strftime('%Y-%m-%d')}T03:00:00Z and createdDateTime le {datetime.datetime.today().strftime('%Y-%m-%d')}T03:00:00Z"
+async def get_data(endpoint, start_date, end_date, worker, token, session):
+    logging_worker = f" [Worker{worker}] "
+    try:        
+        request_filter = f"filter=createdDateTime ge {start_date.strftime('%Y-%m-%dT%H:%M:%SZ')} and createdDateTime le {end_date.strftime('%Y-%m-%dT%H:%M:%S.999999Z')}"
         request_order = "orderby=createdDateTime"
         endpoint_signIns = f"{endpoint}?&${request_filter}&${request_order}"
 
-        logging.info(f"Endpoint set as: '{endpoint_signIns}'")
+        logging.info(f"{logging_worker}Endpoint set as: '{endpoint_signIns}'")
 
         page_counter = 1
 
-        logging.info(f"Getting page {page_counter}")
+        logging.info(f"{logging_worker}Getting page {page_counter}")
         try:
             graph_data = await get_graph_data(endpoint_signIns, token, session)
         except Exception as e:
-            logging.error(f"Error getting graph data: {e}")
+            logging.error(f"{logging_worker}Error getting graph data: {e}")
             graph_data = None
 
         while "error" in graph_data or None == graph_data:  
-            logging.error(f"graph data with error or empty. {graph_data['error']['code']} {graph_data['error']['message']}")          
+            logging.error(f"{logging_worker}graph data with error or empty. {graph_data['error']['code']} {graph_data['error']['message']}")          
             if graph_data['error']['code'] == "InvalidAuthenticationToken":
                 token = await renew_token()
             try:
                 graph_data = await get_graph_data(endpoint_signIns, token, session)
             except Exception as e:
-                logging.error(f"Error getting graph data: {e}")
+                logging.error(f"{logging_worker}Error getting graph data: {e}")
                 graph_data = None
 
         tasks = []
         for row in graph_data["value"]:
             if row:
                 try:
-                    tasks.append(asyncio.ensure_future(save_to_html(row)))
-                    tasks.append(asyncio.ensure_future(save_to_csv(row)))
+                    tasks.append(asyncio.ensure_future(save_to_html(row, worker)))
+                    tasks.append(asyncio.ensure_future(save_to_csv(row, worker)))
 
                 #if len(tasks) == 50:
                     #logging.info(f"Gathering page tasks")
                     await asyncio.gather(*tasks, return_exceptions=True)
                 except Exception as e:
-                    logging.error(f"Error writing row data to files: {e}")
+                    logging.error(f"{logging_worker}Error writing row data to files: {e}")
 
                 tasks = []
 
@@ -215,7 +218,7 @@ async def get_data(endpoint, token, session):
         #logging.info(f"Gathering page last tasks")
         #await asyncio.gather(*tasks, return_exceptions=True)
 
-        logging.info("HTML and CSV file appended.")
+        logging.info(f"{logging_worker}HTML and CSV file appended.")
 
         page_counter += 1
 
@@ -225,35 +228,35 @@ async def get_data(endpoint, token, session):
             if token["renew_datetime"] <= (datetime.datetime.now() + datetime.timedelta(minutes=5)):
                 token = await renew_token() 
 
-            logging.info(f"Getting page {page_counter}")              
+            logging.info(f"{logging_worker}Getting page {page_counter}")              
             try:
                 graph_data = await get_graph_data(next_link, token, session)
             except Exception as e:
-                logging.error(f"Error getting graph data: {e}")
+                logging.error(f"{logging_worker}Error getting graph data: {e}")
                 graph_data = None
 
             while "error" in graph_data or None == graph_data:  
-                logging.error(f"graph data with error or empty. {graph_data['error']['code']} {graph_data['error']['message']}")          
+                logging.error(f"{logging_worker}graph data with error or empty. {graph_data['error']['code']} {graph_data['error']['message']}")          
                 if graph_data['error']['code'] == "InvalidAuthenticationToken":
                     token = await renew_token()
                 try:
                     graph_data = await get_graph_data(next_link, token, session)
                 except Exception as e:
-                    logging.error(f"Error getting graph data: {e}")
+                    logging.error(f"{logging_worker}Error getting graph data: {e}")
                     graph_data = None
             
             tasks = []
             for row in graph_data["value"]:
                 if row:
                     try:
-                        tasks.append(asyncio.ensure_future(save_to_html(row)))
-                        tasks.append(asyncio.ensure_future(save_to_csv(row)))
+                        tasks.append(asyncio.ensure_future(save_to_html(row, worker)))
+                        tasks.append(asyncio.ensure_future(save_to_csv(row, worker)))
                     
                     #if len(tasks) == 50:
                         #logging.info(f"Gathering page tasks")
                         await asyncio.gather(*tasks, return_exceptions=True)
                     except Exception as e:
-                        logging.error(f"Error writing row data to files: {e}")
+                        logging.error(f"{logging_worker}Error writing row data to files: {e}")
 
                     tasks = []
                 
@@ -261,28 +264,18 @@ async def get_data(endpoint, token, session):
             #logging.info(f"Gathering page last tasks")
             #await asyncio.gather(*tasks, return_exceptions=True)
 
-            logging.info("HTML and CSV file appended.")
+            logging.info("{logging_worker}HTML and CSV file appended.")
 
             page_counter += 1
         
         return True
         
     except Exception as e:
-        logging.error(f"Exception getting report data: {e}")
-        return False     
+        logging.error(f"{logging_worker}Exception getting report data: {e}")
+        return False 
 
-async def start_report_gathering(token):  
 
-    print(f"{yesterday.strftime('%Y-%m-%d')}T03:00:00Z")
-
-    start_datetime = yesterday.replace(hour=3, minute=0, second=0)
-    start_datetime2 = start_datetime + datetime.timedelta(hours=2)
-    end_datetime = start_datetime2 - datetime.timedelta(seconds=1)
-
-    print(f"{start_datetime.strftime('%Y-%m-%dT%H:%M:%SZ')}")
-    print(f"{end_datetime.strftime('%Y-%m-%dT%H:%M:%S.999999Z')}")
-    print(f"{start_datetime2.strftime('%Y-%m-%dT%H:%M:%SZ')}")
-
+async def gather_files():
 
     header_columns = [
         "Nome",
@@ -312,27 +305,46 @@ async def start_report_gathering(token):
         csv_writer = csv.writer(csv_file)
         csv_writer.writerow(header_columns)
 
+    # Close files
+    with open(html_file_path, "a", newline='', encoding='utf-8') as html_file:
+        html_file.write("</table></body></html>")
+        
+    logging.info(f"Finished getting result pages, everything exported to CSV and HTML files '{csv_file_path}'.")
+
+    ps_script_path = os.path.join(current_wdpath, "ConvertTo-ExcelCustomReportHTML.ps1")
+    #ps_html_path = os.path.join(current_wdpath, "teste.html")
+    ps_xlsx_path = os.path.join(current_wdpath, output_files_fname, f"AuditoriaEntrada_{yesterday.strftime('%d-%m-%Y')}_Completo_{str(uuid.uuid4())}.xlsx")
+
+    ps_args = f"{ps_script_path} -HtmlPath {html_file_path} -XlsxPath {ps_xlsx_path}"
+    await call_ps(ps_args)  
+
+
+async def start_report_gathering(token): 
+
+    workers = 12
+
+    tasks = []
+    start_datetime = yesterday.replace(hour=3, minute=0, second=0)
 
     async with aiohttp.ClientSession() as session:
-        #await get_data(token, session)
-        #tasks = []
-        #tasks.append(asyncio.ensure_future(get_data(config["endpoint_signIns"], token, session)))
-        #result = await asyncio.gather(*tasks, return_exceptions=True)
-        result = await get_data(config["endpoint_signIns"], token, session)        
+        for i in range(workers):
+            if i == 0:
+                task_start_datetime = start_datetime
+                next_task_start_datetime = start_datetime + datetime.timedelta(hours=(24 / workers))
+                task_end_datetime = next_task_start_datetime - datetime.timedelta(seconds=1)
+            else:
+                task_start_datetime = next_task_start_datetime
+                next_task_start_datetime = next_task_start_datetime + datetime.timedelta(hours=(24 / workers))
+                task_end_datetime = next_task_start_datetime - datetime.timedelta(seconds=1)
 
-        if result:
-            # Close html file.
-            with open(html_file_path, "a", newline='', encoding='utf-8') as html_file:
-                html_file.write("</table></body></html>")
-            
-            logging.info(f"Finished getting result pages, everything exported to CSV and HTML files '{csv_file_path}'.")
+            logging.info(f"Worker number: {i} - {task_start_datetime.strftime('%Y-%m-%dT%H:%M:%SZ')} to {task_end_datetime.strftime('%Y-%m-%dT%H:%M:%S.999999Z')}")
+            tasks.append(asyncio.ensure_future(get_data(config["endpoint_signIns"], task_start_datetime, task_end_datetime, i, token, session)))
 
-            ps_script_path = os.path.join(current_wdpath, "ConvertTo-ExcelCustomReportHTML.ps1")
-            #ps_html_path = os.path.join(current_wdpath, "teste.html")
-            ps_xlsx_path = os.path.join(current_wdpath, output_files_fname, f"AuditoriaEntrada_{yesterday.strftime('%d-%m-%Y')}_Completo_{str(uuid.uuid4())}.xlsx")
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-            ps_args = f"{ps_script_path} -HtmlPath {html_file_path} -XlsxPath {ps_xlsx_path}"
-            await call_ps(ps_args)      
+    if not False in results:
+        gather_files()
+    #print(f"{start_datetime2.strftime('%Y-%m-%dT%H:%M:%SZ')}")           
 
 
 async def main():
@@ -372,11 +384,12 @@ if __name__ == "__main__":
         csv_file_path = html_file_path.replace(".html", ".csv")
 
         # Logging
+        log_filename_datetime = datetime.datetime.now()
         logging.basicConfig(
             level=logging.INFO,
             format="%(asctime)s [%(levelname)s] %(message)s",
             handlers=[
-                logging.FileHandler(os.path.join(current_wdpath, f"debug_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.log")),
+                logging.FileHandler(os.path.join(current_wdpath, f"debug_{log_filename_datetime.strftime('%Y-%m-%d_%H%M%S')}.log")),
                 logging.StreamHandler()
             ]
         )   
