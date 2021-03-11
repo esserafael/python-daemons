@@ -268,6 +268,7 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
 
             page_counter += 1
         
+        logging.info(f"{logging_worker} Finished getting data.")
         return True
         
     except Exception as e:
@@ -365,8 +366,8 @@ async def start_report_gathering(token):
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        if not False in results:
-            gather_files(workers)
+        #if not False in results:
+        await gather_files(workers)
         #print(f"{start_datetime2.strftime('%Y-%m-%dT%H:%M:%SZ')}")
     except Exception as e:
         logging.error(f"Error in start_report_gathering function: {e}")       
