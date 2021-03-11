@@ -264,7 +264,7 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
             #logging.info(f"Gathering page last tasks")
             #await asyncio.gather(*tasks, return_exceptions=True)
 
-            logging.info("{logging_worker}HTML and CSV file appended.")
+            logging.info(f"{logging_worker}HTML and CSV file appended.")
 
             page_counter += 1
         
@@ -275,7 +275,7 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
         return False 
 
 
-async def gather_files():
+async def gather_files(workers):
 
     header_columns = [
         "Nome",
@@ -305,11 +305,30 @@ async def gather_files():
         csv_writer = csv.writer(csv_file)
         csv_writer.writerow(header_columns)
 
-    # Close files
+    # Appending files.
+    logging.info(f"Consolidating files into a single one of each type.")
+    try:  
+        html_file = open(html_file_path, 'a+')
+        csv_file = open(csv_file_path, 'a+')
+        for worker in range(workers):
+            temp_file = open(html_file_path.replace(".html", f"_worker{worker}.html"), 'r') 
+            html_file.write(temp_file.read())
+            temp_file.close()
+
+            temp_file = open(csv_file_path.replace(".csv", f"_worker{worker}.csv"), 'r') 
+            csv_file.write(temp_file.read())
+            temp_file.close()
+
+        html_file.close()  
+        csv_file.close()
+    except Exception as e:
+        logging.error(f"Exception consolidating files: {e}")
+
+    # Close HTML file tags
     with open(html_file_path, "a", newline='', encoding='utf-8') as html_file:
         html_file.write("</table></body></html>")
         
-    logging.info(f"Finished getting result pages, everything exported to CSV and HTML files '{csv_file_path}'.")
+    logging.info(f"Finished getting results and consolidating data, everything exported to CSV and HTML files.")
 
     ps_script_path = os.path.join(current_wdpath, "ConvertTo-ExcelCustomReportHTML.ps1")
     #ps_html_path = os.path.join(current_wdpath, "teste.html")
@@ -319,32 +338,38 @@ async def gather_files():
     await call_ps(ps_args)  
 
 
-async def start_report_gathering(token): 
+async def start_report_gathering(token):
+    try:
 
-    workers = 12
+        workers = 24
 
-    tasks = []
-    start_datetime = yesterday.replace(hour=3, minute=0, second=0)
+        tasks = []
+        start_datetime = yesterday.replace(hour=3, minute=0, second=0)
 
-    async with aiohttp.ClientSession() as session:
-        for i in range(workers):
-            if i == 0:
-                task_start_datetime = start_datetime
-                next_task_start_datetime = start_datetime + datetime.timedelta(hours=(24 / workers))
-                task_end_datetime = next_task_start_datetime - datetime.timedelta(seconds=1)
-            else:
-                task_start_datetime = next_task_start_datetime
-                next_task_start_datetime = next_task_start_datetime + datetime.timedelta(hours=(24 / workers))
-                task_end_datetime = next_task_start_datetime - datetime.timedelta(seconds=1)
+        async with aiohttp.ClientSession() as session:
+            for i in range(workers):
+                try:
+                    if i == 0:
+                        task_start_datetime = start_datetime
+                        next_task_start_datetime = start_datetime + datetime.timedelta(hours=(24 / workers))
+                        task_end_datetime = next_task_start_datetime - datetime.timedelta(seconds=1)
+                    else:
+                        task_start_datetime = next_task_start_datetime
+                        next_task_start_datetime = next_task_start_datetime + datetime.timedelta(hours=(24 / workers))
+                        task_end_datetime = next_task_start_datetime - datetime.timedelta(seconds=1)
 
-            logging.info(f"Worker number: {i} - {task_start_datetime.strftime('%Y-%m-%dT%H:%M:%SZ')} to {task_end_datetime.strftime('%Y-%m-%dT%H:%M:%S.999999Z')}")
-            tasks.append(asyncio.ensure_future(get_data(config["endpoint_signIns"], task_start_datetime, task_end_datetime, i, token, session)))
+                    logging.info(f"Worker number: {i} - {task_start_datetime.strftime('%Y-%m-%dT%H:%M:%SZ')} to {task_end_datetime.strftime('%Y-%m-%dT%H:%M:%S.999999Z')}")
+                    tasks.append(asyncio.ensure_future(get_data(config["endpoint_signIns"], task_start_datetime, task_end_datetime, i, token, session)))
+                except Exception as e:
+                    logging.error(f"Error during worker/task creation. Worker #{i} - Error: {e}")
 
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    if not False in results:
-        gather_files()
-    #print(f"{start_datetime2.strftime('%Y-%m-%dT%H:%M:%SZ')}")           
+        if not False in results:
+            gather_files(workers)
+        #print(f"{start_datetime2.strftime('%Y-%m-%dT%H:%M:%SZ')}")
+    except Exception as e:
+        logging.error(f"Error in start_report_gathering function: {e}")       
 
 
 async def main():

@@ -28,6 +28,23 @@ function Write-LocalLog
 	Add-Content -Path $LogPath -Value "$($DateTimeNow) - $($Text)"
 }
 
+function Compress-ReportFiles
+{
+	Param (
+		[System.Collections.Hashtable]$Compress
+	)
+
+	try
+	{
+		Compress-Archive @Compress -ErrorAction Stop	
+		Write-LocalLog -Text "Files compressed."
+	}
+	catch
+	{
+		Write-LocalLog -Text "Error compressing files: $($_.Exception.Message)"
+	}
+}
+
 $ScriptPath = Split-Path ($MyInvocation.MyCommand.Path)
 $LogPath = "$($ScriptPath)\debug_PS.log"
 
@@ -85,6 +102,14 @@ catch
 
 if ($XlsxFileCreated)
 {
+	$Compress = @{
+		Path = $XlsxPath
+		CompressionLevel = "Optimal"
+		DestinationPath = ($XlsxPath -replace ".xlsx", ".zip")
+	}
+
+	Compress-ReportFiles -Compress @Compress
+
 	#$To = @("paula.rodrigues@uniasselvi.com.br", "pedro.graca@uniasselvi.com.br", "cloves.machado@uniasselvi.com.br")
 	$To = @("rafael.gustmann@uniasselvi.com.br")
 	$DateString = Split-Path $XlsxPath -Leaf | Select-String -Pattern "^.+_(\d+-\d+-\d+)_"
@@ -99,7 +124,7 @@ if ($XlsxFileCreated)
 						 -Body "<p style='font-family: 'Segoe UI';'>Bom dia!<br /><br />Em anexo está o arquivo com o relatório diário de acessos ao Office 365, do dia $($DateString.Matches.Groups[1].Value).</p>" `
 						 -BodyAsHtml `
 						 -Encoding UTF8 `
-						 -Attachments $XlsxPath `
+						 -Attachments ($XlsxPath -replace ".xlsx", ".zip") `
 						 -SmtpServer "smtp.office365.com" `
 						 -Port "587" `
 						 -UseSsl `
@@ -113,27 +138,20 @@ if ($XlsxFileCreated)
 		Write-LocalLog -Text "Error sending mail: $($_.Exception.Message)"
 	}
 
+	$Compress = @{
+		Path = $HtmlPath, ($HtmlPath -replace ".html", ".csv")
+		CompressionLevel = "Optimal"
+		DestinationPath = ($XlsxPath -replace ".xlsx", "_sources.zip")
+	}
+
+	Compress-ReportFiles -Compress @Compress
+	
 	try
 	{
-		$Compress = @{
-			Path = $XlsxPath, $HtmlPath, ($HtmlPath -replace ".html", ".csv")
-			CompressionLevel = "Optimal"
-			DestinationPath = ($XlsxPath -replace ".xlsx", ".zip")
-		}
-	
-		Compress-Archive @Compress -ErrorAction Stop
-		
-		try
-		{
-			Remove-Item -Path @($XlsxPath, $HtmlPath, ($HtmlPath -replace ".html", ".csv")) -ErrorAction Stop
-		}
-			catch
-		{
-			Write-LocalLog -Text "Error removing files after compression: $($_.Exception.Message)"
-		}		
+		Remove-Item -Path @($XlsxPath, $HtmlPath, ($HtmlPath -replace ".html", ".csv")) -ErrorAction Stop
 	}
-	catch
+		catch
 	{
-		Write-LocalLog -Text "Error compressing files: $($_.Exception.Message)"
-	}
+		Write-LocalLog -Text "Error removing files after compression: $($_.Exception.Message)"
+	}		
 }
