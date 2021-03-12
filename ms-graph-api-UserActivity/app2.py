@@ -108,7 +108,7 @@ async def save_to_html(row, worker):
 <tr>
 <td>{row['userDisplayName']}</td> 
 <td>{row['userPrincipalName']}</td> 
-<td class=date>{converted_dt.astimezone(here_tz).strftime("%Y-%m-%d %H:%M:%S,%f")}</td>
+<td class=date>{converted_dt.astimezone(here_tz).strftime("%Y-%m-%d %H:%M:%S")}</td>
 <td>{row['appDisplayName']}</td> 
 <td>{row['clientAppUsed']}</td> 
 <td>{row['deviceDetail']['browser']}</td> 
@@ -130,13 +130,15 @@ async def save_to_html(row, worker):
 async def save_to_csv(row, worker):
     try:
         logging_worker = f" [Worker{worker}] "
-        with open(csv_file_path.replace(".csv", f"_worker{worker}.csv"), "a", newline='', encoding='utf-8') as csv_file:
+        with open(csv_file_path.replace(".csv", f"_worker{worker}.csv"), "a", newline='', encoding='utf-8-sig') as csv_file:
             csv_writer = csv.writer(csv_file)
             if row:
+                here_tz = tz.tzlocal()
+                converted_dt = parser.parse(row["createdDateTime"])
                 csv_writer.writerow((
                     row["userDisplayName"],
                     row["userPrincipalName"],
-                    row["createdDateTime"],
+                    converted_dt.astimezone(here_tz).strftime("%Y-%m-%d %H:%M:%S"),
                     row["appDisplayName"],
                     row["clientAppUsed"],
                     row["deviceDetail"]["browser"],
@@ -280,7 +282,7 @@ async def gather_files(workers):
 
     header_columns = [
         "Nome",
-        "E-mailUniasselvi",
+        "E-mail",
         "DataDeEntrada",
         "AplicativoMicrosoft",
         "AplicativoClienteUtilizado",
@@ -302,7 +304,7 @@ async def gather_files(workers):
 
     logging.info(f"Creating header row in CSV file '{csv_file_path}'.")    
 
-    with open(csv_file_path, "w", newline='', encoding='utf-8') as csv_file:
+    with open(csv_file_path, "w", newline='', encoding='utf-8-sig') as csv_file:
         csv_writer = csv.writer(csv_file)
         csv_writer.writerow(header_columns)
 
@@ -310,15 +312,19 @@ async def gather_files(workers):
     logging.info(f"Consolidating files into a single one of each type.")
     try:  
         html_file = open(html_file_path, 'a+')
-        csv_file = open(csv_file_path, 'a+')
+        csv_file = open(csv_file_path, 'a+', encoding='utf-8-sig')
         for worker in range(workers):
-            temp_file = open(html_file_path.replace(".html", f"_worker{worker}.html"), 'r') 
+            worker_html_file = html_file_path.replace(".html", f"_worker{worker}.html")
+            temp_file = open(worker_html_file, 'r') 
             html_file.write(temp_file.read())
             temp_file.close()
+            os.remove(worker_html_file)
 
-            temp_file = open(csv_file_path.replace(".csv", f"_worker{worker}.csv"), 'r') 
+            worker_csv_file = csv_file_path.replace(".csv", f"_worker{worker}.csv")
+            temp_file = open(worker_csv_file, 'r') 
             csv_file.write(temp_file.read())
             temp_file.close()
+            os.remove(worker_csv_file)
 
         html_file.close()  
         csv_file.close()
@@ -331,12 +337,16 @@ async def gather_files(workers):
         
     logging.info(f"Finished getting results and consolidating data, everything exported to CSV and HTML files.")
 
-    ps_script_path = os.path.join(current_wdpath, "ConvertTo-ExcelCustomReportHTML.ps1")
-    #ps_html_path = os.path.join(current_wdpath, "teste.html")
-    ps_xlsx_path = os.path.join(current_wdpath, output_files_fname, f"AuditoriaEntrada_{yesterday.strftime('%d-%m-%Y')}_Completo_{str(uuid.uuid4())}.xlsx")
 
-    ps_args = f"{ps_script_path} -HtmlPath {html_file_path} -XlsxPath {ps_xlsx_path}"
-    await call_ps(ps_args)  
+    #ps_script_path = os.path.join(current_wdpath, "ConvertTo-ExcelCustomReportHTML.ps1")
+    #ps_xlsx_path = os.path.join(current_wdpath, output_files_fname, f"AuditoriaEntrada_{yesterday.strftime('%d-%m-%Y')}_Completo_{str(uuid.uuid4())}.xlsx")
+    #ps_args = f"{ps_script_path} -HtmlPath {html_file_path} -XlsxPath {ps_xlsx_path}"
+
+    ps_script_path = os.path.join(current_wdpath, "Send-Reports.ps1")
+    ps_args = f"{ps_script_path} -CsvPath {csv_file_path}"
+    await call_ps(ps_args)
+
+
 
 
 async def start_report_gathering(token):
@@ -398,7 +408,7 @@ if __name__ == "__main__":
         # Creates dir if does not exist.
         pathlib.Path(os.path.join(current_wdpath, output_files_fname)).mkdir(exist_ok=True)
 
-        yesterday = datetime.datetime.today() - datetime.timedelta(days=1)
+        yesterday = datetime.datetime.today() - datetime.timedelta(days=8)
 
         # HTML File
         html_template_path = os.path.join(current_wdpath, "template.html")

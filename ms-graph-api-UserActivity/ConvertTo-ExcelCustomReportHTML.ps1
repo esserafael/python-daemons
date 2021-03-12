@@ -77,6 +77,8 @@ try
 {
 	$Excel = New-Object -ComObject Excel.Application
 	Write-LocalLog -Text "Excel COM Object created."
+
+	$Excel.Visible = $true
 	
 	Write-LocalLog -Text "Opening html file: '$($HtmlPath)'."
 	$Excel.Workbooks.Open($HtmlPath)
@@ -155,3 +157,29 @@ if ($XlsxFileCreated)
 		Write-LocalLog -Text "Error removing files after compression: $($_.Exception.Message)"
 	}		
 }
+
+# SIG # Begin signature block
+# MIIERQYJKoZIhvcNAQcCoIIENjCCBDICAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
+# gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUDK6dwcID9g5MGUM0B/eJq2TQ
+# JaWgggJPMIICSzCCAbigAwIBAgIQdvBRStRxQLtN+xdsJ3lUIzAJBgUrDgMCHQUA
+# MCwxKjAoBgNVBAMTIVBvd2Vyc2hlbGwgTG9jYWwgQ2VydGlmaWNhdGUgUm9vdDAe
+# Fw0xNDAxMTUxOTAwMDNaFw0zOTEyMzEyMzU5NTlaMCwxKjAoBgNVBAMTIVJhZmFl
+# bCBBbGV4YW5kcmUgRmV1c3RlbCBHdXN0bWFubjCBnzANBgkqhkiG9w0BAQEFAAOB
+# jQAwgYkCgYEAmgXb1TwwApRob/zVjgSd6oAUw7YXNWoJRHsqMCAXayQvM9EnlXFs
+# CRJwwIEhvXiCH6r1hS/6zrmv9lDt3BEluatXh4H/d5j0tEBooAGgo/XjDmi41Jqa
+# vvO5B1HRdEzpOg4frvVhnsePZBeFsQ+hkBEBTc1s+XRzCWAz/KxVKucCAwEAAaN2
+# MHQwEwYDVR0lBAwwCgYIKwYBBQUHAwMwXQYDVR0BBFYwVIAQd7PfMUxd/VRgG5cA
+# g45ofqEuMCwxKjAoBgNVBAMTIVBvd2Vyc2hlbGwgTG9jYWwgQ2VydGlmaWNhdGUg
+# Um9vdIIQuew/eHSS36NIqbMcsQa1IDAJBgUrDgMCHQUAA4GBAAANjbwCEFvAWTXQ
+# P6Tixm5blKv/h07STBx2S6bjTPBCmUlhTQD3PdFAvrEniTx8qtdRfLEdNmxKaa26
+# 55i7k8NlGPFmCGBFCDEzXM6UyinKOmepTOA2z1Z9byXuUwe284r6Rj4wCTrcDczT
+# PgMWCa8pTUjg+0xfrl/MO7yt2PNEMYIBYDCCAVwCAQEwQDAsMSowKAYDVQQDEyFQ
+# b3dlcnNoZWxsIExvY2FsIENlcnRpZmljYXRlIFJvb3QCEHbwUUrUcUC7TfsXbCd5
+# VCMwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZI
+# hvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcC
+# ARUwIwYJKoZIhvcNAQkEMRYEFLSV9oA5FNRyzr7APR2N0joNZL+DMA0GCSqGSIb3
+# DQEBAQUABIGANU4wZjE50pZ4fT6fr21VB7HyijA9FZijldDL23DQlzDIDQmMCdTZ
+# WvdmD2LSwSGExwjJkjvqQkxU/W/Ah5byRepUXdQyoiJj+9J3tvJb9fVo+zusy7b8
+# +VtBl6TacnHhIwUzue46smTuEGOLEKr6F696GsG8PpmYskpfR+pkVvw=
+# SIG # End signature block

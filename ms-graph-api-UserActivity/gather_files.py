@@ -54,7 +54,7 @@ async def gather_files(workers):
 
     header_columns = [
         "Nome",
-        "E-mailUniasselvi",
+        "E-mail",
         "DataDeEntrada",
         "AplicativoMicrosoft",
         "AplicativoClienteUtilizado",
@@ -76,7 +76,7 @@ async def gather_files(workers):
 
     logging.info(f"Creating header row in CSV file '{csv_file_path}'.")    
 
-    with open(csv_file_path, "w", newline='', encoding='utf-8') as csv_file:
+    with open(csv_file_path, "w", newline='', encoding='utf-8-sig') as csv_file:
         csv_writer = csv.writer(csv_file)
         csv_writer.writerow(header_columns)
 
@@ -84,7 +84,7 @@ async def gather_files(workers):
     logging.info(f"Consolidating files into a single one of each type.")
     try:  
         html_file = open(html_file_path, 'a+')
-        csv_file = open(csv_file_path, 'a+')
+        csv_file = open(csv_file_path, 'a+', encoding='utf-8-sig')
         for worker in range(workers):
             temp_file = open(html_file_path.replace(".html", f"_worker{worker}.html"), 'r') 
             html_file.write(temp_file.read())
@@ -105,11 +105,13 @@ async def gather_files(workers):
         
     logging.info(f"Finished getting results and consolidating data, everything exported to CSV and HTML files.")
 
-    ps_script_path = os.path.join(current_wdpath, "ConvertTo-ExcelCustomReportHTML.ps1")
-    #ps_html_path = os.path.join(current_wdpath, "teste.html")
-    ps_xlsx_path = os.path.join(current_wdpath, output_files_fname, f"AuditoriaEntrada_{yesterday.strftime('%d-%m-%Y')}_Completo_{str(uuid.uuid4())}.xlsx")
 
-    ps_args = f"{ps_script_path} -HtmlPath {html_file_path} -XlsxPath {ps_xlsx_path}"
+    #ps_script_path = os.path.join(current_wdpath, "ConvertTo-ExcelCustomReportHTML.ps1")
+    #ps_xlsx_path = os.path.join(current_wdpath, output_files_fname, f"AuditoriaEntrada_{yesterday.strftime('%d-%m-%Y')}_Completo_{str(uuid.uuid4())}.xlsx")
+    #ps_args = f"{ps_script_path} -HtmlPath {html_file_path} -XlsxPath {ps_xlsx_path}"
+
+    ps_script_path = os.path.join(current_wdpath, "Send-Reports.ps1")
+    ps_args = f"{ps_script_path} -CsvPath {csv_file_path}"
     await call_ps(ps_args)       
 
 
