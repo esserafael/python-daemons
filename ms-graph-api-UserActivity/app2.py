@@ -202,15 +202,30 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
                 graph_data = None
 
         tasks = []
+        previous_row_str = None
         for row in graph_data["value"]:
             if row:
+                this_row_str = json.dumps({k: row[k] for k in (
+                    'userPrincipalName',
+                    'createdDateTime',
+                    'appDisplayName',
+                    'clientAppUsed',
+                    'ipAddress'
+                    )})
                 try:
-                    tasks.append(asyncio.ensure_future(save_to_html(row, worker)))
-                    tasks.append(asyncio.ensure_future(save_to_csv(row, worker)))
+                    if ("@tutor.uniasselvi.com.br" in row["userPrincipalName"] or 
+                        "@aluno.uniasselvi.com.br" in row["userPrincipalName"]) and (this_row_str != previous_row_str):
 
-                #if len(tasks) == 50:
-                    #logging.info(f"Gathering page tasks")
-                    await asyncio.gather(*tasks, return_exceptions=True)
+                        tasks.append(asyncio.ensure_future(save_to_html(row, worker)))
+                        tasks.append(asyncio.ensure_future(save_to_csv(row, worker)))
+
+                        #if len(tasks) == 50:
+                        #logging.info(f"Gathering page tasks")
+
+                        previous_row_str = this_row_str
+
+                        await asyncio.gather(*tasks, return_exceptions=True)
+
                 except Exception as e:
                     logging.error(f"{logging_worker}Error writing row data to files: {e}")
 
@@ -248,15 +263,35 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
                     graph_data = None
             
             tasks = []
+            previous_row_str = None
             for row in graph_data["value"]:
                 if row:
+                    #'''
+                    this_row_str = json.dumps({k: row[k] for k in (
+                        'userPrincipalName',
+                        'createdDateTime',
+                        'appDisplayName',
+                        'clientAppUsed',
+                        'ipAddress'
+                        )})
+                    #'''
+                    #this_row_str = f"{row['userPrincipalName']}{row['createdDateTime']}{row['appDisplayName']}{row['clientAppUsed']}{row['ipAddress']}"
                     try:
-                        tasks.append(asyncio.ensure_future(save_to_html(row, worker)))
-                        tasks.append(asyncio.ensure_future(save_to_csv(row, worker)))
-                    
-                    #if len(tasks) == 50:
-                        #logging.info(f"Gathering page tasks")
-                        await asyncio.gather(*tasks, return_exceptions=True)
+                        if ("@tutor.uniasselvi.com.br" in row["userPrincipalName"] or 
+                            "@aluno.uniasselvi.com.br" in row["userPrincipalName"]) and (this_row_str != previous_row_str):
+
+                            #if this_row_str != previous_row_str:
+                            
+                            tasks.append(asyncio.ensure_future(save_to_html(row, worker)))
+                            tasks.append(asyncio.ensure_future(save_to_csv(row, worker)))
+
+                            previous_row_str = this_row_str
+
+                            #if len(tasks) == 50:
+                                #logging.info(f"Gathering page tasks")
+
+                            await asyncio.gather(*tasks, return_exceptions=True) 
+
                     except Exception as e:
                         logging.error(f"{logging_worker}Error writing row data to files: {e}")
 
