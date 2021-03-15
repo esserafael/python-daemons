@@ -156,7 +156,7 @@ async def save_to_csv(row, worker):
         await save_to_csv(row)
 
 
-async def get_graph_data(endpoint, token, session):
+async def get_graph_data(endpoint:str, token, session):
     async with session.get(
         endpoint,
         headers={
@@ -184,7 +184,7 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
 
         page_counter = 1
 
-        logging.info(f"{logging_worker}Getting page {page_counter}")
+        logging.info(f"{logging_worker}Getting page {page_counter}. Endpoint: '{endpoint_signIns}'")
         try:
             graph_data = await get_graph_data(endpoint_signIns, token, session)
         except Exception as e:
@@ -207,7 +207,6 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
             if row:
                 this_row_str = json.dumps({k: row[k] for k in (
                     'userPrincipalName',
-                    'createdDateTime',
                     'appDisplayName',
                     'clientAppUsed',
                     'ipAddress'
@@ -240,12 +239,12 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
         page_counter += 1
 
         while "@odata.nextLink" in graph_data:
-            next_link = graph_data["@odata.nextLink"]
+            next_link = str(graph_data["@odata.nextLink"])
 
             if token["renew_datetime"] <= (datetime.datetime.now() + datetime.timedelta(minutes=5)):
                 token = await renew_token() 
 
-            logging.info(f"{logging_worker}Getting page {page_counter}")              
+            logging.info(f"{logging_worker}Getting page {page_counter}. Endpoint: '{next_link}'")              
             try:
                 graph_data = await get_graph_data(next_link, token, session)
             except Exception as e:
@@ -266,21 +265,15 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
             previous_row_str = None
             for row in graph_data["value"]:
                 if row:
-                    #'''
                     this_row_str = json.dumps({k: row[k] for k in (
                         'userPrincipalName',
-                        'createdDateTime',
                         'appDisplayName',
                         'clientAppUsed',
                         'ipAddress'
                         )})
-                    #'''
-                    #this_row_str = f"{row['userPrincipalName']}{row['createdDateTime']}{row['appDisplayName']}{row['clientAppUsed']}{row['ipAddress']}"
                     try:
                         if ("@tutor.uniasselvi.com.br" in row["userPrincipalName"] or 
                             "@aluno.uniasselvi.com.br" in row["userPrincipalName"]) and (this_row_str != previous_row_str):
-
-                            #if this_row_str != previous_row_str:
                             
                             tasks.append(asyncio.ensure_future(save_to_html(row, worker)))
                             tasks.append(asyncio.ensure_future(save_to_csv(row, worker)))
@@ -443,7 +436,7 @@ if __name__ == "__main__":
         # Creates dir if does not exist.
         pathlib.Path(os.path.join(current_wdpath, output_files_fname)).mkdir(exist_ok=True)
 
-        yesterday = datetime.datetime.today() - datetime.timedelta(days=8)
+        yesterday = datetime.datetime.today() - datetime.timedelta(days=10)
 
         # HTML File
         html_template_path = os.path.join(current_wdpath, "template.html")
