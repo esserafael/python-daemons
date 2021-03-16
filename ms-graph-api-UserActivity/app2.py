@@ -174,6 +174,78 @@ async def get_graph_data(endpoint:str, token, session):
 
 
 async def get_data(endpoint, start_date, end_date, worker, token, session):
+
+    async def get_graph_data_inner(endpoint_inner: str, token, session):
+        graph_data_status = False
+        while not graph_data_status:
+            try:
+                logging.info(f"{logging_worker}Getting page {page_counter}. Endpoint: '{endpoint_inner}'")
+                try:
+                    graph_data = await get_graph_data(endpoint_inner, token, session)
+                except Exception as e:
+                    logging.error(f"{logging_worker}Error getting graph data (1): {e}")
+                    #graph_data = None
+                if graph_data:
+                    if "error" in graph_data:
+                        logging.error(f"{logging_worker}graph_data with error. {graph_data['error']['code']} {graph_data['error']['message']}")
+                        if graph_data['error']['code'] == "InvalidAuthenticationToken":
+                            token = await renew_token()
+                    else:
+                        graph_data_status = True
+
+            except Exception as e:
+                logging.error(f"{logging_worker}Error getting graph data (2): {e}")
+
+            if not graph_data_status:
+                asyncio.sleep(10)
+        
+        return graph_data
+
+
+    async def save_to_files_inner(graph_data, worker):
+        try:
+            tasks = []
+            previous_row_str = None
+            if graph_data:
+                for row in graph_data["value"]:
+                    if row:
+                        this_row_str = json.dumps({k: row[k] for k in (
+                            'userPrincipalName',
+                            'appDisplayName',
+                            'clientAppUsed',
+                            'ipAddress'
+                            )})
+                        try:
+                            if ("@tutor.uniasselvi.com.br" in row["userPrincipalName"] or 
+                                "@aluno.uniasselvi.com.br" in row["userPrincipalName"]) and (this_row_str != previous_row_str):
+
+                                tasks.append(asyncio.ensure_future(save_to_html(row, worker)))
+                                tasks.append(asyncio.ensure_future(save_to_csv(row, worker)))
+
+                                #if len(tasks) == 50:
+                                #logging.info(f"Gathering page tasks")
+
+                                previous_row_str = this_row_str
+
+                                await asyncio.gather(*tasks, return_exceptions=True)
+
+                        except Exception as e:
+                            logging.error(f"{logging_worker}Error writing row data to files: {e}")
+
+                        tasks = []
+            else:
+                logging.warning(f"{logging_worker}graph_data returned None somehow? (3)")
+
+                
+            #logging.info(f"Gathering page last tasks")
+            #await asyncio.gather(*tasks, return_exceptions=True)
+
+            logging.info(f"{logging_worker}HTML and CSV file appended.")
+        
+        except Exception as e:
+            logging.error(f"{logging_worker}Error writing graph data in files: {e}")
+
+
     logging_worker = f" [Worker{worker}] "
     try:        
         request_filter = f"filter=createdDateTime ge {start_date.strftime('%Y-%m-%dT%H:%M:%SZ')} and createdDateTime le {end_date.strftime('%Y-%m-%dT%H:%M:%S.999999Z')}"
@@ -184,57 +256,74 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
 
         page_counter = 1
 
-        logging.info(f"{logging_worker}Getting page {page_counter}. Endpoint: '{endpoint_signIns}'")
-        try:
-            graph_data = await get_graph_data(endpoint_signIns, token, session)
-        except Exception as e:
-            logging.error(f"{logging_worker}Error getting graph data: {e}")
-            graph_data = None
-
-        while "error" in graph_data or None == graph_data:  
-            logging.error(f"{logging_worker}graph data with error or empty. {graph_data['error']['code']} {graph_data['error']['message']}")          
-            if graph_data['error']['code'] == "InvalidAuthenticationToken":
-                token = await renew_token()
+        '''
+        graph_data_status = False
+        while not graph_data_status:
             try:
-                graph_data = await get_graph_data(endpoint_signIns, token, session)
-            except Exception as e:
-                logging.error(f"{logging_worker}Error getting graph data: {e}")
-                graph_data = None
-
-        tasks = []
-        previous_row_str = None
-        for row in graph_data["value"]:
-            if row:
-                this_row_str = json.dumps({k: row[k] for k in (
-                    'userPrincipalName',
-                    'appDisplayName',
-                    'clientAppUsed',
-                    'ipAddress'
-                    )})
+                logging.info(f"{logging_worker}Getting page {page_counter}. Endpoint: '{endpoint_signIns}'")
                 try:
-                    if ("@tutor.uniasselvi.com.br" in row["userPrincipalName"] or 
-                        "@aluno.uniasselvi.com.br" in row["userPrincipalName"]) and (this_row_str != previous_row_str):
-
-                        tasks.append(asyncio.ensure_future(save_to_html(row, worker)))
-                        tasks.append(asyncio.ensure_future(save_to_csv(row, worker)))
-
-                        #if len(tasks) == 50:
-                        #logging.info(f"Gathering page tasks")
-
-                        previous_row_str = this_row_str
-
-                        await asyncio.gather(*tasks, return_exceptions=True)
-
+                    graph_data = await get_graph_data(endpoint_signIns, token, session)
                 except Exception as e:
-                    logging.error(f"{logging_worker}Error writing row data to files: {e}")
+                    logging.error(f"{logging_worker}Error getting graph data (1): {e}")
+                    #graph_data = None
+                if graph_data:
+                    if "error" in graph_data:
+                        logging.error(f"{logging_worker}graph_data with error. {graph_data['error']['code']} {graph_data['error']['message']}")
+                        if graph_data['error']['code'] == "InvalidAuthenticationToken":
+                            token = await renew_token()
+                    else:
+                        graph_data_status = True
 
-                tasks = []
+            except Exception as e:
+                logging.error(f"{logging_worker}Error getting graph data (2): {e}")
 
-            
-        #logging.info(f"Gathering page last tasks")
-        #await asyncio.gather(*tasks, return_exceptions=True)
+        try:
+            tasks = []
+            previous_row_str = None
+            if graph_data:
+                for row in graph_data["value"]:
+                    if row:
+                        this_row_str = json.dumps({k: row[k] for k in (
+                            'userPrincipalName',
+                            'appDisplayName',
+                            'clientAppUsed',
+                            'ipAddress'
+                            )})
+                        try:
+                            if ("@tutor.uniasselvi.com.br" in row["userPrincipalName"] or 
+                                "@aluno.uniasselvi.com.br" in row["userPrincipalName"]) and (this_row_str != previous_row_str):
 
-        logging.info(f"{logging_worker}HTML and CSV file appended.")
+                                tasks.append(asyncio.ensure_future(save_to_html(row, worker)))
+                                tasks.append(asyncio.ensure_future(save_to_csv(row, worker)))
+
+                                #if len(tasks) == 50:
+                                #logging.info(f"Gathering page tasks")
+
+                                previous_row_str = this_row_str
+
+                                await asyncio.gather(*tasks, return_exceptions=True)
+
+                        except Exception as e:
+                            logging.error(f"{logging_worker}Error writing row data to files: {e}")
+
+                        tasks = []
+            else:
+                logging.warning(f"{logging_worker}graph_data returned None somehow? (3)")
+
+                
+            #logging.info(f"Gathering page last tasks")
+            #await asyncio.gather(*tasks, return_exceptions=True)
+
+            logging.info(f"{logging_worker}HTML and CSV file appended.")
+
+            page_counter += 1
+        
+        except Exception as e:
+            logging.error(f"{logging_worker}Error writing graph data in files: {e}")
+        '''
+        
+        graph_data = await get_graph_data_inner(endpoint_signIns, token, session)
+        await save_to_files_inner(graph_data, worker)
 
         page_counter += 1
 
@@ -244,6 +333,12 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
             if token["renew_datetime"] <= (datetime.datetime.now() + datetime.timedelta(minutes=5)):
                 token = await renew_token() 
 
+            graph_data = await get_graph_data_inner(next_link, token, session)
+            await save_to_files_inner(graph_data, worker)
+
+            page_counter += 1
+
+            '''
             logging.info(f"{logging_worker}Getting page {page_counter}. Endpoint: '{next_link}'")              
             try:
                 graph_data = await get_graph_data(next_link, token, session)
@@ -261,44 +356,54 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
                     logging.error(f"{logging_worker}Error getting graph data: {e}")
                     graph_data = None
             
-            tasks = []
-            previous_row_str = None
-            for row in graph_data["value"]:
-                if row:
-                    this_row_str = json.dumps({k: row[k] for k in (
-                        'userPrincipalName',
-                        'appDisplayName',
-                        'clientAppUsed',
-                        'ipAddress'
-                        )})
-                    try:
-                        if ("@tutor.uniasselvi.com.br" in row["userPrincipalName"] or 
-                            "@aluno.uniasselvi.com.br" in row["userPrincipalName"]) and (this_row_str != previous_row_str):
-                            
-                            tasks.append(asyncio.ensure_future(save_to_html(row, worker)))
-                            tasks.append(asyncio.ensure_future(save_to_csv(row, worker)))
 
-                            previous_row_str = this_row_str
+            try:
+                tasks = []
+                previous_row_str = None
+                if graph_data:
+                    for row in graph_data["value"]:
+                        if row:
+                            this_row_str = json.dumps({k: row[k] for k in (
+                                'userPrincipalName',
+                                'appDisplayName',
+                                'clientAppUsed',
+                                'ipAddress'
+                                )})
+                            try:
+                                if ("@tutor.uniasselvi.com.br" in row["userPrincipalName"] or 
+                                    "@aluno.uniasselvi.com.br" in row["userPrincipalName"]) and (this_row_str != previous_row_str):
+                                    
+                                    tasks.append(asyncio.ensure_future(save_to_html(row, worker)))
+                                    tasks.append(asyncio.ensure_future(save_to_csv(row, worker)))
 
-                            #if len(tasks) == 50:
-                                #logging.info(f"Gathering page tasks")
+                                    previous_row_str = this_row_str
 
-                            await asyncio.gather(*tasks, return_exceptions=True) 
+                                    #if len(tasks) == 50:
+                                        #logging.info(f"Gathering page tasks")
 
-                    except Exception as e:
-                        logging.error(f"{logging_worker}Error writing row data to files: {e}")
+                                    await asyncio.gather(*tasks, return_exceptions=True) 
 
-                    tasks = []
+                            except Exception as e:
+                                logging.error(f"{logging_worker}Error writing row data to files: {e}")
+
+                            tasks = []
+                else:
+                    logging.warning(f"{logging_worker}graph_data returned None. Possibly correlated with [WinError 121] The semaphore timeout period has expired")
+                    
                 
+                #logging.info(f"Gathering page last tasks")
+                #await asyncio.gather(*tasks, return_exceptions=True)
+
+                logging.info(f"{logging_worker}HTML and CSV file appended.")
+
+                page_counter += 1
             
-            #logging.info(f"Gathering page last tasks")
-            #await asyncio.gather(*tasks, return_exceptions=True)
+            except Exception as e:
+                logging.error(f"{logging_worker}Error writing graph data in files: {e}")
+            '''
 
-            logging.info(f"{logging_worker}HTML and CSV file appended.")
-
-            page_counter += 1
         
-        logging.info(f"{logging_worker} Finished getting data.")
+        logging.info(f"{logging_worker}Finished getting and writing data.")
         return True
         
     except Exception as e:
@@ -436,7 +541,7 @@ if __name__ == "__main__":
         # Creates dir if does not exist.
         pathlib.Path(os.path.join(current_wdpath, output_files_fname)).mkdir(exist_ok=True)
 
-        yesterday = datetime.datetime.today() - datetime.timedelta(days=10)
+        yesterday = datetime.datetime.today() - datetime.timedelta(days=6)
 
         # HTML File
         html_template_path = os.path.join(current_wdpath, "template.html")
