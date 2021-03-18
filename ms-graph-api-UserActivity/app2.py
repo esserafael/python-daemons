@@ -96,7 +96,7 @@ async def call_ps(ps_args):
         return None
 
 
-async def save_to_html(row, worker):
+async def save_to_html(row, worker, html_file_path):
     try:
         logging_worker = f" [Worker{worker}] "
         with open(html_file_path.replace(".html", f"_worker{worker}.html"), "a", newline='', encoding='utf-8') as html_file:
@@ -127,7 +127,7 @@ async def save_to_html(row, worker):
         await save_to_html(row)
 
 
-async def save_to_csv(row, worker):
+async def save_to_csv(row, worker, csv_file_path):
     try:
         logging_worker = f" [Worker{worker}] "
         with open(csv_file_path.replace(".csv", f"_worker{worker}.csv"), "a", newline='', encoding='utf-8-sig') as csv_file:
@@ -173,7 +173,7 @@ async def get_graph_data(endpoint:str, token, session):
             return await get_graph_data(endpoint, token, session)
 
 
-async def get_data(endpoint, start_date, end_date, worker, token, session):
+async def get_data(endpoint, start_date, end_date, worker, csv_file_path, html_file_path, token, session):
 
     async def get_graph_data_inner(endpoint_inner: str, token, session):
         graph_data_status = False
@@ -202,7 +202,7 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
         return graph_data
 
 
-    async def save_to_files_inner(graph_data, worker):
+    async def save_to_files_inner(graph_data, worker, csv_file_path, html_file_path):
         try:
             tasks = []
             previous_row_str = None
@@ -219,8 +219,8 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
                             if ("@tutor.uniasselvi.com.br" in row["userPrincipalName"] or 
                                 "@aluno.uniasselvi.com.br" in row["userPrincipalName"]) and (this_row_str != previous_row_str):
 
-                                tasks.append(asyncio.ensure_future(save_to_html(row, worker)))
-                                tasks.append(asyncio.ensure_future(save_to_csv(row, worker)))
+                                tasks.append(asyncio.ensure_future(save_to_html(row, worker, html_file_path)))
+                                tasks.append(asyncio.ensure_future(save_to_csv(row, worker, csv_file_path)))
 
                                 #if len(tasks) == 50:
                                 #logging.info(f"Gathering page tasks")
@@ -323,7 +323,7 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
         '''
         
         graph_data = await get_graph_data_inner(endpoint_signIns, token, session)
-        await save_to_files_inner(graph_data, worker)
+        await save_to_files_inner(graph_data, worker, csv_file_path, html_file_path)
 
         page_counter += 1
 
@@ -334,7 +334,7 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
                 token = await renew_token() 
 
             graph_data = await get_graph_data_inner(next_link, token, session)
-            await save_to_files_inner(graph_data, worker)
+            await save_to_files_inner(graph_data, worker, csv_file_path, html_file_path)
 
             page_counter += 1
 
@@ -411,39 +411,40 @@ async def get_data(endpoint, start_date, end_date, worker, token, session):
         return False 
 
 
-async def gather_files(workers):
+async def gather_files(csv_file_path, html_file_path, workers):
 
-    header_columns = [
-        "Nome",
-        "E-mail",
-        "DataDeEntrada",
-        "AplicativoMicrosoft",
-        "AplicativoClienteUtilizado",
-        "Navegador",
-        "SistemaOperacional",
-        "IPAddress",
-        "Cidade",
-        "Estado",
-        "País"
-    ]
+    try:
+        header_columns = [
+            "Nome",
+            "E-mail",
+            "DataDeEntrada",
+            "AplicativoMicrosoft",
+            "AplicativoClienteUtilizado",
+            "Navegador",
+            "SistemaOperacional",
+            "IPAddress",
+            "Cidade",
+            "Estado",
+            "País"
+        ]
 
-    logging.info(f"Creating column headers in HTML file '{html_file_path}'.")
+        logging.info(f"Creating column headers in HTML file '{html_file_path}'.")
 
-    with open(html_file_path, "a", newline='', encoding='utf-8') as html_file:
-        html_file.write("<tr class=header>")    
-        for header_name in header_columns:
-            html_file.write(f"<td>{header_name}</td>")
-        html_file.write("</tr>")
+        with open(html_file_path, "a", newline='', encoding='utf-8') as html_file:
+            html_file.write("<tr class=header>")    
+            for header_name in header_columns:
+                html_file.write(f"<td>{header_name}</td>")
+            html_file.write("</tr>")
 
-    logging.info(f"Creating header row in CSV file '{csv_file_path}'.")    
+        logging.info(f"Creating header row in CSV file '{csv_file_path}'.")    
 
-    with open(csv_file_path, "w", newline='', encoding='utf-8-sig') as csv_file:
-        csv_writer = csv.writer(csv_file)
-        csv_writer.writerow(header_columns)
+        with open(csv_file_path, "w", newline='', encoding='utf-8-sig') as csv_file:
+            csv_writer = csv.writer(csv_file)
+            csv_writer.writerow(header_columns)
 
-    # Appending files.
-    logging.info(f"Consolidating files into a single one of each type.")
-    try:  
+        # Appending files.
+        logging.info(f"Consolidating files into a single one of each type.")
+      
         html_file = open(html_file_path, 'a+')
         csv_file = open(csv_file_path, 'a+', encoding='utf-8-sig')
         for worker in range(workers):
@@ -475,42 +476,64 @@ async def gather_files(workers):
     #ps_xlsx_path = os.path.join(current_wdpath, output_files_fname, f"AuditoriaEntrada_{yesterday.strftime('%d-%m-%Y')}_Completo_{str(uuid.uuid4())}.xlsx")
     #ps_args = f"{ps_script_path} -HtmlPath {html_file_path} -XlsxPath {ps_xlsx_path}"
 
+    return csv_file_path
+    
+    '''
     ps_script_path = os.path.join(current_wdpath, "Send-Reports.ps1")
     ps_args = f"{ps_script_path} -CsvPath {csv_file_path}"
     await call_ps(ps_args)
+    '''
 
 
-
-
-async def start_report_gathering(token):
+async def start_report_gathering(start_hour: int, timerange: int, workers: int, token):
     try:
 
-        workers = 24
+        #timerange = 24
+        #workers = 24
+        #timerange = 6
+        #workers = 6
 
         tasks = []
-        start_datetime = yesterday.replace(hour=3, minute=0, second=0)
+        #start_datetime = yesterday.replace(hour=3, minute=0, second=0)
+        start_datetime = yesterday.replace(hour=start_hour, minute=0, second=0)
+
+        #if not False in results:
+        if start_hour < 15:
+            period_name = "Manha"
+        elif start_hour < 21:
+            period_name = "Tarde"
+        else:
+            period_name = "Noite"
+
+        # HTML File
+        html_template_path = os.path.join(current_wdpath, "template.html")
+        html_file_path = os.path.join(current_wdpath, output_files_fname, f"auditSignIns_{yesterday.strftime('%Y-%m-%d')}_generated_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}_{period_name}.html")
+
+        copyfile(html_template_path, html_file_path)
+
+        # CSV File
+        csv_file_path = html_file_path.replace(".html", ".csv")
 
         async with aiohttp.ClientSession() as session:
             for i in range(workers):
                 try:
                     if i == 0:
                         task_start_datetime = start_datetime
-                        next_task_start_datetime = start_datetime + datetime.timedelta(hours=(24 / workers))
+                        next_task_start_datetime = start_datetime + datetime.timedelta(hours=(timerange / workers))
                         task_end_datetime = next_task_start_datetime - datetime.timedelta(seconds=1)
                     else:
                         task_start_datetime = next_task_start_datetime
-                        next_task_start_datetime = next_task_start_datetime + datetime.timedelta(hours=(24 / workers))
+                        next_task_start_datetime = next_task_start_datetime + datetime.timedelta(hours=(timerange / workers))
                         task_end_datetime = next_task_start_datetime - datetime.timedelta(seconds=1)
 
                     logging.info(f"Worker number: {i} - {task_start_datetime.strftime('%Y-%m-%dT%H:%M:%SZ')} to {task_end_datetime.strftime('%Y-%m-%dT%H:%M:%S.999999Z')}")
-                    tasks.append(asyncio.ensure_future(get_data(config["endpoint_signIns"], task_start_datetime, task_end_datetime, i, token, session)))
+                    tasks.append(asyncio.ensure_future(get_data(config["endpoint_signIns"], task_start_datetime, task_end_datetime, i, csv_file_path, html_file_path, token, session)))
                 except Exception as e:
                     logging.error(f"Error during worker/task creation. Worker #{i} - Error: {e}")
 
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        #if not False in results:
-        await gather_files(workers)
+        return await gather_files(csv_file_path, html_file_path, workers)
         #print(f"{start_datetime2.strftime('%Y-%m-%dT%H:%M:%SZ')}")
     except Exception as e:
         logging.error(f"Error in start_report_gathering function: {e}")       
@@ -521,7 +544,14 @@ async def main():
     token = await get_token()
 
     if "access_token" in token:
-        await start_report_gathering(token)
+        files = []
+        files.append(await start_report_gathering(21, 6, 6, token)) 
+        files.append(await start_report_gathering(9, 12, 12, token))
+
+        ps_script_path = os.path.join(current_wdpath, "Send-Reports.ps1")
+        ps_args = f"{ps_script_path} -CsvPath {', '.join(files)}"
+        logging.info(f"ps_args: {ps_args}")
+        await call_ps(ps_args)
     else:
         logging.error(f"{token.get('error')}: {token.get('error_description')} (correlation_ID: {token.get('correlation_id')})")
         print(token.get("error"))
@@ -541,16 +571,7 @@ if __name__ == "__main__":
         # Creates dir if does not exist.
         pathlib.Path(os.path.join(current_wdpath, output_files_fname)).mkdir(exist_ok=True)
 
-        yesterday = datetime.datetime.today() - datetime.timedelta(days=6)
-
-        # HTML File
-        html_template_path = os.path.join(current_wdpath, "template.html")
-        html_file_path = os.path.join(current_wdpath, output_files_fname, f"auditSignIns_{yesterday.strftime('%Y-%m-%d')}_generated_{datetime.datetime.now().strftime('%Y-%m-%d_%H%M%S')}.html")
-
-        copyfile(html_template_path, html_file_path)
-
-        # CSV File
-        csv_file_path = html_file_path.replace(".html", ".csv")
+        yesterday = datetime.datetime.today() - datetime.timedelta(days=9)
 
         # Logging
         log_filename_datetime = datetime.datetime.now()

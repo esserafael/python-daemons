@@ -13,7 +13,7 @@
 
 Param (
 	[Parameter(Mandatory = $true)]
-	[String]$CsvPath
+	[String[]]$CsvPath
 )
 
 function Write-LocalLog
@@ -69,17 +69,24 @@ catch
 	Write-LocalLog "$($_.Exception.Message)"
 }
 
+$ZipFiles = @()
 
-$Compress = @{
-	Path = $CsvPath
-	CompressionLevel = "Optimal"
-	DestinationPath = ($CsvPath -replace ".csv", ".zip")
+foreach ($Path in $CsvPath)
+{
+	$DestFile = ($Path -replace ".csv", ".zip")
+	$ZipFiles += $DestFile
+
+	$Compress = @{
+		Path = $Path
+		CompressionLevel = "Optimal"
+		DestinationPath = $DestFile
+	}
+	
+	Compress-ReportFiles -Compress $Compress
 }
 
-Compress-ReportFiles -Compress $Compress
-
-$To = @("paula.rodrigues@uniasselvi.com.br", "pedro.graca@uniasselvi.com.br", "cloves.machado@uniasselvi.com.br")
-#$To = @("rafael.gustmann@uniasselvi.com.br")
+#$To = @("paula.rodrigues@uniasselvi.com.br", "pedro.graca@uniasselvi.com.br", "cloves.machado@uniasselvi.com.br")
+$To = @("rafael.gustmann@uniasselvi.com.br")
 $DateString = Split-Path $CsvPath -Leaf | Select-String -Pattern "^auditSignIns_(\d+-\d+-\d+)_"
 
 try
@@ -89,10 +96,10 @@ try
 						-To $To `
 						-Cc "rafael.gustmann@uniasselvi.com.br" `
 						-Subject "Relatório diário de acessos ao Office 365." `
-						-Body "<p style='font-family: 'Segoe UI';'>Olá!<br /><br />Em anexo está o arquivo com o relatório diário de acessos ao Office 365, do dia $($DateString.Matches.Groups[1].Value).<br /><br />Um ótimo dia!</p>" `
+						-Body "<p style='font-family: 'Segoe UI';'>Olá!<br /><br />Em anexo estão os arquivos com relatórios diários de acessos ao Office 365, do dia $($DateString.Matches.Groups[1].Value).<br /><br />Um arquivo contém os acessos da manhã e tarde (6:00 às 18:00), outro com acessos no período da noite (18:00 à 00:00).</p>" `
 						-BodyAsHtml `
 						-Encoding UTF8 `
-						-Attachments ($CsvPath -replace ".csv", ".zip") `
+						-Attachments $ZipFiles `
 						-SmtpServer "smtp.office365.com" `
 						-Port "587" `
 						-UseSsl `
@@ -106,17 +113,21 @@ catch
 	Write-LocalLog -Text "Error sending mail: $($_.Exception.Message)"
 }
 
+$ZipFiles += ($CsvPath -replace ".csv", ".html")
+
 $Compress = @{
-	Path = $CsvPath, ($CsvPath -replace ".csv", ".html")
+	Path = $ZipFiles
 	CompressionLevel = "Optimal"
-	DestinationPath = ($CsvPath -replace ".csv", "_sources.zip")
+	DestinationPath = ($CsvPath[0] -replace "_Noite\.csv|_Manha\.csv|_Tarde\.csv", "_sources.zip")
 }
 
 Compress-ReportFiles -Compress $Compress
 
 try
 {
-	Remove-Item -Path @($CsvPath, ($CsvPath -replace ".csv", ".html")) -ErrorAction Stop
+	$CsvPath += ($CsvPath -replace ".csv", ".html")
+	Remove-Item -Path $CsvPath -ErrorAction Stop
+	Remove-Item -Path $ZipFiles -ErrorAction Stop
 }
 	catch
 {
