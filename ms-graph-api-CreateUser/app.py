@@ -15,6 +15,7 @@ You can then run this sample with a JSON configuration file:
 
 import os
 import sys  # For simplicity, we'll read config file from 1st CLI param sys.argv[1]
+import datetime
 import json
 import logging
 import re
@@ -25,9 +26,12 @@ import msal
 import asyncio
 import time
 
+import keyring
+
 
 async def get_token():
 
+    '''
     client_secret_env = "py_usermgt_secret"
     client_secret = os.getenv(client_secret_env)
     if not client_secret:
@@ -36,7 +40,9 @@ async def get_token():
         raise ValueError(errmsg)
     else:
         logging.info(f"Secret {client_secret_env} found.")
+    '''
 
+    client_secret = keyring.get_password(config["keyring_app"], config["client_id"])
 
     # Create a preferably long-lived app instance which maintains a token cache.
     app = msal.ConfidentialClientApplication(
@@ -57,10 +63,26 @@ async def get_token():
     if not result:
         logging.info("No token exists in cache. Getting a new one from AzureAD.")
         result = app.acquire_token_for_client(scopes=config["scope"])
+
+    result.update({
+        "renew_datetime": datetime.datetime.now() + datetime.timedelta(seconds=result["expires_in"]),
+        "gioconda_access_token": keyring.get_password(config["keyring_app"], "gioconda_auth")
+        })
     
     return result
 
 
+async def renew_token():
+    logging.info("Getting new AzureAD token.")
+    result = await get_token()
+    while not "access_token" in result:
+        logging.error(f"Error getting new token: {result.get('error')}: {result.get('error_description')} (correlation_ID: {result.get('correlation_id')})")                
+        time.sleep(30)
+        result = await get_token()
+
+    return result
+
+'''
 async def get_gioconda_token():    
     client_secret_env = "py_usermgt_gioconda_secret"
     client_secret = os.getenv(client_secret_env)
@@ -72,7 +94,7 @@ async def get_gioconda_token():
         logging.info(f"Gioconda Secret {client_secret_env} found.")
 
     return client_secret
-
+'''
 
 async def add_license(user, token, session, *args):
     try:
@@ -213,6 +235,10 @@ async def start_user_creation(token):
         endpoint_gioconda_status = config["endpoint_gioconda_status_homo"]
 
     async with aiohttp.ClientSession() as session:
+
+        if token["renew_datetime"] <= (datetime.datetime.now() + datetime.timedelta(minutes=5)):
+            token = await renew_token() 
+
         async with session.get(
             endpoint_gioconda,
             headers={
@@ -241,7 +267,6 @@ async def main():
     token = await get_token()
 
     if "access_token" in token:
-        token.update({"gioconda_access_token": await get_gioconda_token()})
         await start_user_creation(token)
     else:
         logging.error(f"{token.get('error')}: {token.get('error_description')} (correlation_ID: {token.get('correlation_id')})")

@@ -9,5 +9,6 @@
   "endpoint_gioconda_status_homo": "",
   "sku_docente": "78e66a63-337a-4a9a-8959-41c6654dfb56",
   "sku_aluno": "e82ae690-a2d5-4d76-8d30-7c6e01e6022e",
+  "keyring_app": "py_usermgt",
   "prod": false
 }
