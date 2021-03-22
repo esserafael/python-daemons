@@ -1,0 +1,13 @@
+{
+  "authority": "https://login.microsoftonline.com/",
+  "scope": [ "https://graph.microsoft.com/.default" ],
+  "client_id": "",
+  "endpoint_users": "https://graph.microsoft.com/v1.0/users",
+  "endpoint_gioconda_prod": "",
+  "endpoint_gioconda_homo": "",
+  "endpoint_gioconda_status_prod": "",
+  "endpoint_gioconda_status_homo": "",
+  "sku_docente": "78e66a63-337a-4a9a-8959-41c6654dfb56",
+  "sku_aluno": "e82ae690-a2d5-4d76-8d30-7c6e01e6022e",
+  "prod": false
+}
