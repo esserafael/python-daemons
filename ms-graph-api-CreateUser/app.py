@@ -27,6 +27,7 @@ import asyncio
 import time
 
 import keyring
+import uuid
 
 
 async def get_token():
@@ -233,26 +234,37 @@ async def start_user_creation(token):
     else:
         endpoint_gioconda = config["endpoint_gioconda_homo"]
         endpoint_gioconda_status = config["endpoint_gioconda_status_homo"]
+        created_json_file = os.path.join(current_wdpath, f"CreatedUsers_{uuid.uuid4()}.json")
 
     async with aiohttp.ClientSession() as session:
 
-        if token["renew_datetime"] <= (datetime.datetime.now() + datetime.timedelta(minutes=5)):
-            token = await renew_token() 
+        while True:
 
-        async with session.get(
-            endpoint_gioconda,
-            headers={
-                'Authorization': 'Basic ' + token['gioconda_access_token'],
-            }
-        ) as response:
-            if response.status == 200:
-                tasks = []
-                users = json.loads(await response.read())
-                for user in users:
-                    logging.info(json.dumps(user))
-                    tasks.append(asyncio.ensure_future(create_user(user, token, session, endpoint_gioconda_status)))
+            if token["renew_datetime"] <= (datetime.datetime.now() + datetime.timedelta(minutes=5)):
+                token = await renew_token() 
+
+            async with session.get(
+                endpoint_gioconda,
+                headers={
+                    'Authorization': 'Basic ' + token['gioconda_access_token'],
+                }
+            ) as response:
+                if response.status == 200:
+                    tasks = []
+                    users = json.loads(await response.read())
+                    for user in users:
+                        #logging.info(json.dumps(user))
+                        tasks.append(asyncio.ensure_future(create_user(user, token, session, endpoint_gioconda_status)))
+
+                        if not config['prod']:
+                            with open(created_json_file, 'a', encoding='utf-8') as json_file:
+                                json_file.write(json.dumps(user))
+                    
+                    await asyncio.gather(*tasks, return_exceptions=True)
                 
-                await asyncio.gather(*tasks, return_exceptions=True)
+                elif response.status >= 500:
+                    logging.error(f"Getting error while trying to request Gioconda API - ({response.status} {response.reason}).")
+                    time.sleep(30)
 
         
         #task = asyncio.ensure_future(get_org_data(token, session))
@@ -296,6 +308,7 @@ if __name__ == "__main__":
         )   
 
         s = time.perf_counter()
+        logging.info(f"Script started. Production: {config['prod']}")
         asyncio.get_event_loop().run_until_complete(main())
         elapsed = time.perf_counter() - s
         logging.info(f"Script finished, executed in {elapsed:0.2f} seconds.")
