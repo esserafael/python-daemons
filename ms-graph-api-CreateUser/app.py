@@ -189,17 +189,31 @@ async def create_user(user, token, session, *args):
 
             elif response.status == 400:
                 error = json.loads(await response.read())
-                if "userPrincipalName already exists" in error:
+                log_message_end = f"{log_message_end} - {error['error']['message']}"
+
+                if "userPrincipalName already exists" in error['error']['message']:                    
                     # Try to assign license
                     logging.info(f"{log_message_begin} - User already exists, will try to assign license. {log_message_end}")
-                    user.update(await add_license(user, token, session, license_sku))
+                    user.update(await add_license(user, token, session, license_sku))                    
                 else:
-                    logging.error(f"{log_message_begin} - User has not been created {log_message_end}")
-                    user['result_msg'] = f"Erro ao criar usuário. {log_message_end}"
+                    logging.warning(f"{log_message_begin} - User has not been created. Checking if it already exists. {log_message_end}")
+
+                    async with session.get(
+                        f"{config['endpoint_users']}/{user['emailAD']}",
+                        headers={
+                            'Authorization': 'Bearer ' + token['access_token']
+                        }
+                    ) as response_get_user:
+                        if response_get_user.status == 200:
+                            logging.info(f"{log_message_begin} - User already exists.")
+                            user.update(await add_license(user, token, session, license_sku))
+                        else:
+                            logging.error(f"{log_message_begin} - User has not been created {log_message_end}")
+                            user.update({"result_msg": f"Erro ao criar usuário. {log_message_end}"})                  
 
             else:
                 logging.error(f"{log_message_begin} - User has not been created {log_message_end}")
-                user['result_msg'] = f"Erro ao criar usuário. {log_message_end}"
+                user.update({"result_msg": f"Erro ao criar usuário. {log_message_end}"})
         
     except Exception as e:
         logging.error(f"{log_message_begin} - Error creating user: {e}")
@@ -240,31 +254,37 @@ async def start_user_creation(token):
 
         while True:
 
-            if token["renew_datetime"] <= (datetime.datetime.now() + datetime.timedelta(minutes=5)):
-                token = await renew_token() 
+            try:
 
-            async with session.get(
-                endpoint_gioconda,
-                headers={
-                    'Authorization': 'Basic ' + token['gioconda_access_token'],
-                }
-            ) as response:
-                if response.status == 200:
-                    tasks = []
-                    users = json.loads(await response.read())
-                    for user in users:
-                        #logging.info(json.dumps(user))
-                        tasks.append(asyncio.ensure_future(create_user(user, token, session, endpoint_gioconda_status)))
+                if token["renew_datetime"] <= (datetime.datetime.now() + datetime.timedelta(minutes=5)):
+                    token = await renew_token() 
 
-                        if not config['prod']:
-                            with open(created_json_file, 'a', encoding='utf-8') as json_file:
-                                json_file.write(json.dumps(user))
+                async with session.get(
+                    endpoint_gioconda,
+                    headers={
+                        'Authorization': 'Basic ' + token['gioconda_access_token'],
+                    }
+                ) as response:
+                    if response.status == 200:
+                        tasks = []
+                        users = json.loads(await response.read())
+                        for user in users:
+                            #logging.info(json.dumps(user))
+                            tasks.append(asyncio.ensure_future(create_user(user, token, session, endpoint_gioconda_status)))
+
+                            if not config['prod']:
+                                with open(created_json_file, 'a', encoding='utf-8') as json_file:
+                                    json_file.write(json.dumps(user))
+                        
+                        await asyncio.gather(*tasks, return_exceptions=True)
                     
-                    await asyncio.gather(*tasks, return_exceptions=True)
-                
-                elif response.status >= 500:
-                    logging.error(f"Getting error while trying to request Gioconda API - ({response.status} {response.reason}).")
-                    time.sleep(30)
+                    elif response.status >= 500:
+                        logging.error(f"Getting error response while trying to request Gioconda API - ({response.status} {response.reason}).")
+                        time.sleep(30)
+            
+            except Exception as e:
+                logging.error(f"Error(2): {str(e)}")
+                time.sleep(10)
 
         
         #task = asyncio.ensure_future(get_org_data(token, session))
@@ -313,4 +333,4 @@ if __name__ == "__main__":
         elapsed = time.perf_counter() - s
         logging.info(f"Script finished, executed in {elapsed:0.2f} seconds.")
     except Exception as e:
-        logging.error(f"Error: {str(e)}")
+        logging.error(f"Error(1): {str(e)}")
