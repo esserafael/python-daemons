@@ -126,7 +126,9 @@ async def add_license(user, token, session, *args):
                 user.update({"result_status": "OK", "result_msg": "Usuário criado e licenciado com sucesso."})
             elif response_lic.status == 404:
                 logging.error(f"{log_message_begin} - User has not been found {log_message_end}")
-                user.update({"result_msg": f"Usuário não encontrado (Problema durante licenciamento). {log_message_end}"})
+                await asyncio.sleep(10)
+                user.update(await add_license(user, token, session, license_sku))
+                #user.update({"result_msg": f"Usuário não encontrado (Problema durante licenciamento). {log_message_end}"})
             else:
                 logging.error(f"{log_message_begin} - User has not been licensed {log_message_end}")
                 user.update({"result_msg": f"Erro ao atribuir licença ao usuário. {log_message_end}"})
@@ -159,8 +161,6 @@ async def create_user(user, token, session, *args):
             "mailNickname": re.sub('@.*', '', user['emailAD']),
             "userPrincipalName": user['emailAD'],
             "mail": user['emailAD'],
-            "mobilePhone": user['telefone_recuperacao'],
-            "otherMails": [user['email_recuperacao']],
             "department": department,
             "companyName": "Uniasselvi",
             "country": "BR",
@@ -170,8 +170,17 @@ async def create_user(user, token, session, *args):
                 "forceChangePasswordNextSignIn": False,
                 "password": user['senhaAD']
             },
-            "passwordPolicies": "DisablePasswordExpiration"
+            "passwordPolicies": "DisablePasswordExpiration",
+            "onPremisesExtensionAttributes": {
+                "extensionAttribute3": user['cpf']
+            }
         }
+
+        if user['email_recuperacao']:
+            user_post.update({"otherMails": [user['email_recuperacao']]})
+        
+        if user['telefone_recuperacao']:
+            user_post.update({"mobilePhone": user['telefone_recuperacao']})
 
         async with session.post(
             config['endpoint_users'],
