@@ -37,7 +37,7 @@ async def get_token():
 
     client_id = "d7b889ea-d93d-48bf-8589-196c00c48421"
 
-    client_secret = ".SnN~s7JM-.j.C.fx7X2yJDOXGo6901pG1"
+    client_secret = ""
 
 
     # Create a preferably long-lived app instance which maintains a token cache.
