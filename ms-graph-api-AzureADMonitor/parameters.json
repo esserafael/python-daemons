@@ -3,7 +3,7 @@
   "scope": [ "https://graph.microsoft.com/.default" ],
   "endpoint_org": "https://graph.microsoft.com/v1.0/organization",
   "endpoint_alerts": "https://graph.microsoft.com/v1.0/security/alerts?$filter=severity eq 'high' and severity eq 'medium' and category ne 'AnonymousLogin' and createdDateTime gt 2021-02-01T00:00:00.000Z and createdDateTime lt 2021-02-13T00:00:00.000Z&$top=1",
-  "endpoint_webhook": "",
+  "endpoint_webhook": "https://outlook.office.com/webhook/8a867be9-f970-4d0b-b9f4-0d63e36b62a4@b0e7335f-fd1f-46ad-98c7-55e6e4e222ea/IncomingWebhook/5dfeec98a84f46efa209970e1899b550/fe6be9e1-e6f4-4710-9b47-fd5d145cfae9",
   "zabbix_server": "",
   "zabbix_azuread_host": "azuread",
   "alerts_recipient": "rafael.gustmann@uniasselvi.com.br",
