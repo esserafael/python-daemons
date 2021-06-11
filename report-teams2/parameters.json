@@ -1,0 +1,7 @@
+{
+  "authority": "https://login.microsoftonline.com/b0e7335f-fd1f-46ad-98c7-55e6e4e222ea",
+  "scope": [ "https://graph.microsoft.com/.default" ],
+  "endpoint_users": "https://graph.microsoft.com/v1.0/users",
+  "sku_docente": "78e66a63-337a-4a9a-8959-41c6654dfb56",
+  "sku_aluno": "e82ae690-a2d5-4d76-8d30-7c6e01e6022e"
+}

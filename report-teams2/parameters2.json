@@ -1,0 +1,7 @@
+{
+  "authority": "https://login.microsoftonline.com/b0e7335f-fd1f-46ad-98c7-55e6e4e222ea",
+  "scope": [ "https://graph.microsoft.com/.default" ],
+  "endpoint_users": "https://graph.microsoft.com/v1.0/users",
+  "csv_read_name": "aulas_02_03.csv",
+  "csv_result_name": "result.csv"
+}
