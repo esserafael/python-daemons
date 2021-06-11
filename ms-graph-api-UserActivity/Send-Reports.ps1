@@ -85,8 +85,8 @@ foreach ($Path in $CsvPath)
 	Compress-ReportFiles -Compress $Compress
 }
 
-#$To = @("paula.rodrigues@uniasselvi.com.br", "pedro.graca@uniasselvi.com.br", "cloves.machado@uniasselvi.com.br")
-$To = @("rafael.gustmann@uniasselvi.com.br")
+$To = @("paula.rodrigues@uniasselvi.com.br", "pedro.graca@uniasselvi.com.br", "cloves.machado@uniasselvi.com.br")
+#$To = @("rafael.gustmann@uniasselvi.com.br")
 $DateString = Split-Path $CsvPath -Leaf | Select-String -Pattern "^auditSignIns_(\d+-\d+-\d+)_"
 
 try

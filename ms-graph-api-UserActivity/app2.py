@@ -541,22 +541,27 @@ async def start_report_gathering(start_hour: int, timerange: int, workers: int, 
 
 async def main():
 
+    files = []
+
     token = await get_token()
 
-    if "access_token" in token:
-        files = []
-        files.append(await start_report_gathering(21, 6, 6, token)) 
-        files.append(await start_report_gathering(9, 12, 12, token))
+    if "access_token" in token:        
+        files.append(await start_report_gathering(21, 6, 6, token))
+    else:
+        logging.error(f"{token.get('error')}: {token.get('error_description')} (correlation_ID: {token.get('correlation_id')})")
 
+    token = await get_token()
+
+    if "access_token" in token:        
+        files.append(await start_report_gathering(9, 12, 12, token))
+    else:
+        logging.error(f"{token.get('error')}: {token.get('error_description')} (correlation_ID: {token.get('correlation_id')})")
+
+    if len(files) == 2:
         ps_script_path = os.path.join(current_wdpath, "Send-Reports.ps1")
         ps_args = f"{ps_script_path} -CsvPath {', '.join(files)}"
         logging.info(f"ps_args: {ps_args}")
-        await call_ps(ps_args)
-    else:
-        logging.error(f"{token.get('error')}: {token.get('error_description')} (correlation_ID: {token.get('correlation_id')})")
-        print(token.get("error"))
-        print(token.get("error_description"))
-        print(token.get("correlation_id"))  # You may need this when reporting a bug
+        await call_ps(ps_args)    
 
 
 if __name__ == "__main__":
@@ -571,7 +576,7 @@ if __name__ == "__main__":
         # Creates dir if does not exist.
         pathlib.Path(os.path.join(current_wdpath, output_files_fname)).mkdir(exist_ok=True)
 
-        yesterday = datetime.datetime.today() - datetime.timedelta(days=9)
+        yesterday = datetime.datetime.today() - datetime.timedelta(days=1)
 
         # Logging
         log_filename_datetime = datetime.datetime.now()
